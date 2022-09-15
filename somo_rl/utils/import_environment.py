@@ -34,8 +34,8 @@ def import_env(env_id):
     elif env_name == "PenSpinner":
         import environments.PenSpinner
 
-    elif env_name == "PenSpinnerFar":
-        import environments.PenSpinnerFar
+    # elif env_name == "PenSpinnerFar":
+    #     import environments.PenSpinnerFar
 
     elif env_name == "SnakeLocomotionContinuous":
         import environments.SnakeLocomotionContinuous

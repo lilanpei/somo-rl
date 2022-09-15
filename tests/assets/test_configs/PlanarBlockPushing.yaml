@@ -16,7 +16,8 @@ observation_flags:
   box_pos:
   box_or:
   box_target_dist_vector:
-  box_goal_pos:
+#  box_goal_pos:
+  target_pos:
   box_velocity:
   positions: 4
   velocities: 4
@@ -34,4 +35,5 @@ reward_flags:
   bonus_at_0.05: 20
 torque_multiplier: 50
 box_start_pos: [3, 6.5, 0.6]
-box_goal_pos: [5, 1, 0.5]
+#box_goal_pos: [5, 1, 0.5]
+target_pos: [5, 1, 0.5]

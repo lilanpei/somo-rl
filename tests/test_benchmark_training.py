@@ -71,12 +71,12 @@ def test_PenSpinner_benchmark_training():
 def test_PenSpinner_benchmark_training_gui():
     somogym_benchmark_training_tester("PenSpinner", render=True, debug=True)
 
-# PEN SPINNER FAR
-def test_PenSpinnerFar_benchmark_training():
-    somogym_benchmark_training_tester("PenSpinnerFar")
-@pytest.mark.gui
-def test_PenSpinnerFar_benchmark_training_gui():
-    somogym_benchmark_training_tester("PenSpinnerFar", render=True, debug=True)
+# # PEN SPINNER FAR
+# def test_PenSpinnerFar_benchmark_training():
+#     somogym_benchmark_training_tester("PenSpinnerFar")
+# @pytest.mark.gui
+# def test_PenSpinnerFar_benchmark_training_gui():
+#     somogym_benchmark_training_tester("PenSpinnerFar", render=True, debug=True)
 
 # PLANAR BLOCK PUSHING
 def test_PlanarBlockPushing_benchmark_training():
@@ -112,7 +112,7 @@ if __name__ == "__main__":
         test_InHandManipulation_benchmark_training_gui()
         test_InHandManipulationInverted_benchmark_training_gui()
         test_PenSpinner_benchmark_training_gui()
-        test_PenSpinnerFar_benchmark_training_gui()
+        # test_PenSpinnerFar_benchmark_training_gui()
         test_PlanarBlockPushing_benchmark_training_gui()
         test_PlanarReaching_benchmark_training_gui()
         # test_SnakeLocomotionContinuous_benchmark_training_gui()
@@ -122,7 +122,7 @@ if __name__ == "__main__":
         test_InHandManipulation_benchmark_training()
         test_InHandManipulationInverted_benchmark_training()
         test_PenSpinner_benchmark_training()
-        test_PenSpinnerFar_benchmark_training()
+        # test_PenSpinnerFar_benchmark_training()
         test_PlanarBlockPushing_benchmark_training()
         test_PlanarReaching_benchmark_training()
         # test_SnakeLocomotionContinuous_benchmark_training()

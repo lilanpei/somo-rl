@@ -96,12 +96,12 @@ def test_PenSpinner_step():
 def test_PenSpinner_step_gui():
     somogym_step_tester("PenSpinner", render=True, debug=True, total_env_steps=100)
 
-# PEN SPINNER FAR
-def test_PenSpinnerFar_step():
-    somogym_step_tester("PenSpinnerFar")
-@pytest.mark.gui
-def test_PenSpinnerFar_step_gui():
-    somogym_step_tester("PenSpinnerFar", render=True, debug=True, total_env_steps=100)
+# # PEN SPINNER FAR
+# def test_PenSpinnerFar_step():
+#     somogym_step_tester("PenSpinnerFar")
+# @pytest.mark.gui
+# def test_PenSpinnerFar_step_gui():
+#     somogym_step_tester("PenSpinnerFar", render=True, debug=True, total_env_steps=100)
 
 # PLANAR BLOCK PUSHING
 def test_PlanarBlockPushing_step():
@@ -137,7 +137,7 @@ if __name__ == "__main__":
         test_InHandManipulation_step_gui()
         test_InHandManipulationInverted_step_gui()
         test_PenSpinner_step_gui()
-        test_PenSpinnerFar_step_gui()
+        # test_PenSpinnerFar_step_gui()
         test_PlanarBlockPushing_step_gui()
         test_PlanarReaching_step_gui()
         # test_SnakeLocomotionContinuous_step_gui()
@@ -147,7 +147,7 @@ if __name__ == "__main__":
         test_InHandManipulation_step()
         test_InHandManipulationInverted_step()
         test_PenSpinner_step()
-        test_PenSpinnerFar_step()
+        # test_PenSpinnerFar_step()
         test_PlanarBlockPushing_step()
         test_PlanarReaching_step()
         # test_SnakeLocomotionContinuous_step()
