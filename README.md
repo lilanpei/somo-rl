@@ -22,7 +22,7 @@ ___
 - if python3.8 or 3.9 doesnt work: install python3.7; make sure to also install the venv for python3.7: apt-get install python3.7-dev python3.7-ven
 
 ## Setup
-1. clone this repo: `git clone https://github.com/t7mccarthy/somo-rl.git`
+1. clone this repo: `git clone https://github.com/GrauleM/somo-rl.git`
 2. upgrade pip: `python -m pip install --upgrade pip` or `pip install -U pip --upgrade`
 3. create a dedicated virtual environment: `python -m venv /path_to_new_venv`
 4. activate the environment: `source /path_to_new_venv/bin/activate`
