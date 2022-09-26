@@ -162,9 +162,11 @@ class Policy_rollout:
             obs, rewards, _dones, info = self.env.step(action)
 
             if record_data:
+                print("  * Step: " + str(i))
                 print("  * REWARD: " + str(rewards))
                 total_reward += rewards
 
+                print("  * z_rotation: " + str(info['z_rotation_step']) if info['z_rotation_step'] else str(info['z_rotation']))
                 self.actions[i] = deepcopy(action)
                 self.applied_torques[i] = deepcopy(self.env.applied_torque)
                 self.observations[i] = deepcopy(obs)
@@ -189,7 +191,7 @@ class Policy_rollout:
     def run_and_save_rollout(
         self,
         model="best_model",
-        from_callbacks=False, 
+        from_callbacks=False,
         num_steps=None,
         run_render=True,
         save_vid=False,
@@ -215,7 +217,7 @@ class Policy_rollout:
         observations_df.to_pickle(data_dir_ID / "observations.pkl")
         actions_df.to_pickle(data_dir_ID / "actions.pkl")
 
-    
+
     def calculate_success_rate(self, model="best_model", num_steps=None, num_runs=10):
         success_rate_dir = self.results_dir / "success_rate"
         os.makedirs(success_rate_dir, exist_ok=True)
@@ -224,7 +226,7 @@ class Policy_rollout:
 
         for i in range(num_runs):
             results[i] = self.run_rollout(model=model, from_callbacks=False, num_steps=num_steps, run_render=False, save_vid=False, zero_action=False, record_data=False)
-        
+
         success_rate = np.mean(results) * 100
         print(f"Finished {num_runs} rollouts on {self.run_ID}!")
         print(f"SUCCESS COUNT: {np.sum(results)}")

@@ -280,7 +280,7 @@ def run(
         run_config["alg"],
         run_config["policy"],
         train_env,
-        policy_kwargs=policy_kwargs,
+        **policy_kwargs,
         tensorboard_log=tensorboard_log,
         verbose=1
     )

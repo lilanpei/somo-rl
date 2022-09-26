@@ -1,3 +1,3 @@
-USER = "to_be_defined"
-EXPERIMENT_ABS_PATH = "/to_be_defined/somogym-baseline-results/experiments"
-EXPERT_ABS_PATH = "to_be_defined/somo-rl-experiments/experts/ihm_rotate_gait"
+USER = "lanpei"
+EXPERIMENT_ABS_PATH = "/home/lanpei/thesis_project/somo-rl/test_exp/"
+EXPERT_ABS_PATH = "/home/lanpei/thesis_project/somo-rl/somo-rl-experiments/experts"
