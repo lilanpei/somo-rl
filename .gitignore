@@ -144,3 +144,9 @@ dmypy.json
 # Cluster slurm images
 */*/somo_rl.img
 */*/overlay.img
+
+# Test experiment
+/test_exp
+
+# User setting
+user_setting.py
