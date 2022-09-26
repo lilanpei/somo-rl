@@ -166,7 +166,7 @@ class Policy_rollout:
                 print("  * REWARD: " + str(rewards))
                 total_reward += rewards
 
-                print("  * z_rotation: " + str(info['z_rotation_step']) if info['z_rotation_step'] else str(info['z_rotation']))
+                print("  * z_rotation: " + (str(info['z_rotation_step']) if 'z_rotation_step' in info else str(np.degrees(info['z_rotation']))))
                 self.actions[i] = deepcopy(action)
                 self.applied_torques[i] = deepcopy(self.env.applied_torque)
                 self.observations[i] = deepcopy(obs)
