@@ -65,7 +65,7 @@ def validate_config(
             return {}
 
     try:
-        jsonschema.validate(run_config, yaml.load(schema))
+        jsonschema.validate(run_config, yaml.safe_load(schema))
     except jsonschema.exceptions.ValidationError as exp:
         print("RUN CONFIG ERROR: " + str(exp))
         return {}
