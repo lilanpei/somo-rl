@@ -1,11 +1,16 @@
 import os
 import yaml
+import argparse
 from pathlib import Path
+from somo_rl.utils import parse_config
+from user_settings import EXPERIMENT_ABS_PATH
 
-def run_config_generator(path):
+def run_config_generator(path, seed_start, seed_end):
 	"""
 	parameters:
-	1.path: path to the run
+	1. path: path to the run
+	2. seed_start: starting value of the range of random seed
+	3. seed_end: ending value of the range of random seed
 	"""
 	checkpoint_cb = {
 		"save_freq": 2000
@@ -38,7 +43,7 @@ def run_config_generator(path):
 	        "batch_size": 25
 	        }
 
-	for seed in range(20):
+	for seed in range(seed_start, seed_end+1):
 		dir=os.path.join(path, f"seed_{seed}")
 		Path(dir).mkdir(parents=True, exist_ok=True)
 		run_config_dict = {
@@ -63,9 +68,48 @@ def run_config_generator(path):
 			"invert_hand": True,
 			"tensorboard_log": os.path.join(dir, "tensorboard_log")
 			}
-		with open(os.path.join(dir, 'run_config.yaml'), 'w+', encoding='utf8') as outfile:
+		run_config = os.path.join(dir, 'run_config.yaml')
+		with open(run_config, 'w+', encoding='utf8') as outfile:
 			yaml.dump(run_config_dict, outfile, default_flow_style=False)
+			if not parse_config.validate_config(run_config):
+				raise (Exception, "ERROR: Invalid run config")
 
 if __name__ == "__main__":
-	path = "/home/lanpei/thesis_project/somo-rl/test_exp/InHandManipulationInverted-v0/SAC_test"
-	run_config_generator(path)
+	parser = argparse.ArgumentParser(description="Generating run config yaml")
+	parser.add_argument(
+		"-e",
+		"--exp_name",
+		help="Experiment name",
+		required=True,
+		default=None,
+	)
+	parser.add_argument(
+		"-g",
+		"--run_group_name",
+		help="Run-group name",
+		required=True,
+		default=None,
+	)
+	parser.add_argument(
+		"--exp_abs_path",
+		help="Experiment directory absolute path",
+		required=False,
+		default=EXPERIMENT_ABS_PATH,
+	)
+	parser.add_argument(
+		"-ss",
+		"--seed_start",
+		help="Starting value of the range of random seed",
+		required=True,
+		default=0
+	)
+	parser.add_argument(
+		"-se",
+		"--seed_end",
+		help="Ending value of the range of random seed",
+		required=True,
+		default=19
+	)
+	arg = parser.parse_args()
+	path = os.path.join(arg.exp_abs_path, arg.exp_name, arg.run_group_name)
+	run_config_generator(path=path, seed_start=int(arg.seed_start), seed_end=int(arg.seed_end))
