@@ -47,7 +47,7 @@ def run_config_generator(path, seed_start, seed_end):
 		dir=os.path.join(path, f"seed_{seed}")
 		Path(dir).mkdir(parents=True, exist_ok=True)
 		run_config_dict = {
-			"object": "cube",
+			"object": (list(path.split("_")))[-1],
 			"action_time": 0.01,
 			"alg": "SAC",
 			"bullet_time_step": 0.0002,
