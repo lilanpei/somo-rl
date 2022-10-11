@@ -13,7 +13,7 @@ def run_config_generator(path, seed_start, seed_end):
 	3. seed_end: ending value of the range of random seed
 	"""
 	checkpoint_cb = {
-		"save_freq": 2000
+		"save_freq": 20000
 		}
 	eval_cb = {
 		"eval_freq": 2000,
