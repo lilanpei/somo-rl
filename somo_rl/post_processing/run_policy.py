@@ -137,6 +137,7 @@ class Policy_rollout:
         self.applied_torques = [None] * num_steps
         self.observations = [None] * num_steps
         self.reward_info = [None] * num_steps
+        self.step_info = [None] * num_steps
         self.rewards = [None] * num_steps
 
         if run_render and save_vid:
@@ -170,6 +171,7 @@ class Policy_rollout:
                 self.actions[i] = deepcopy(action)
                 self.applied_torques[i] = deepcopy(self.env.applied_torque)
                 self.observations[i] = deepcopy(obs)
+                self.step_info[i] = deepcopy(info)
                 self.reward_info[i] = extract_step_reward(prev_total_rewards, info)
                 self.rewards[i] = rewards
 
@@ -208,6 +210,7 @@ class Policy_rollout:
         reward_df = pd.DataFrame(self.rewards, columns=["step_reward"])
         reward_components_df = pd.concat([reward_df, pd.DataFrame(self.reward_info)], axis=1)
         observations_df = pd.DataFrame(self.observations)
+        step_info_df = pd.DataFrame(self.step_info)
         raw_actions_df = pd.DataFrame(self.actions, columns=[f"action_{i}" for i in range(len(self.actions[0]))])
         applied_torques_df = pd.DataFrame(self.applied_torques, columns=[f"applied_{i}" for i in range(len(self.actions[0]))])
         actions_df = pd.concat([raw_actions_df, applied_torques_df], axis=1)
@@ -215,6 +218,7 @@ class Policy_rollout:
         # save dataframes
         reward_components_df.to_pickle(data_dir_ID / "reward_components.pkl")
         observations_df.to_pickle(data_dir_ID / "observations.pkl")
+        step_info_df.to_pickle(data_dir_ID / "info.pkl")
         actions_df.to_pickle(data_dir_ID / "actions.pkl")
 
 
