@@ -26,26 +26,25 @@ def process_z_step_rotation_data(
         exp_name,
         run_group_name,
         run_name,
-        show=True,
-        save_figs=True
+        save_figs=True,
+        silent=False
 ):
     run_ID = [exp_name, run_group_name, run_name]
     z_step_rotation_data = Process_z_rotation_data(exp_abs_path=exp_abs_path, run_ID=run_ID)
     for i, res in enumerate(glob.glob(os.path.join(z_step_rotation_data.run_results_dir, "**", "info.pkl"), recursive=True)):
-        print((list(res.split(os.sep)))[-2])
         with open(res, 'rb') as f:
             plt.plot(pickle.load(f)['z_rotation_step'])
-            plt.xlabel = "steps"
-            plt.ylabel = "z_rotation_step"
-            plt.title = (list(res.split(os.sep)))[-2]
+            plt.xlabel("steps")
+            plt.ylabel("z_rotation_step")
+            plt.title((list(res.split(os.sep)))[-6] + " : " + (list(res.split(os.sep)))[-2])
             plt.tight_layout()
 
             if save_figs:
-                print("save to ", res[:-8])
+                print("save to ", res[:-8] + "z_step_rotation.png")
                 plt.savefig(os.path.join(res[:-8], "z_step_rotation.png"))
-                plt.savefig(os.path.join(res[:-8], "z_step_rotation.eps"), format="eps")
+                # plt.savefig(os.path.join(res[:-8], "z_step_rotation.eps"), format="eps")
 
-            if show:
+            if not silent:
                 plt.show()
 
 
@@ -85,6 +84,12 @@ if __name__ == "__main__":
         action="store_true",
     )
 
+    parser.add_argument(
+        "--silent",
+        help="do not show plots",
+        action="store_true",
+    )
+
     arg = parser.parse_args()
 
     process_z_step_rotation_data(
@@ -92,6 +97,6 @@ if __name__ == "__main__":
         arg.exp_name,
         arg.run_group_name,
         arg.run_name,
-        show=True,
-        save_figs=arg.save
+        save_figs=arg.save,
+        silent=arg.silent
     )
