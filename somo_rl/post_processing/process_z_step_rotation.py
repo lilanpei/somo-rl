@@ -31,12 +31,14 @@ def process_z_step_rotation_data(
 ):
     run_ID = [exp_name, run_group_name, run_name]
     z_step_rotation_data = Process_z_rotation_data(exp_abs_path=exp_abs_path, run_ID=run_ID)
-    for i, res in enumerate(glob.glob(os.path.join(z_step_rotation_data.run_results_dir, "**", "info.pkl"), recursive=True)):
+    for _, res in enumerate(glob.glob(os.path.join(z_step_rotation_data.run_results_dir, "**", "info.pkl"), recursive=True)):
         with open(res, 'rb') as f:
-            plt.plot(pickle.load(f)['z_rotation_step'])
+            data = pickle.load(f)
+            plt.plot(data['z_rotation_step'])
+            print(f"Final z rotation : {data['z_rotation_step'].iat[-1]}")
             plt.xlabel("steps")
             plt.ylabel("z_rotation_step")
-            plt.title((list(res.split(os.sep)))[-6] + " : " + (list(res.split(os.sep)))[-2])
+            plt.title(f"Z rotation for {(list(res.split(os.sep)))[-6][4:]} : {str(data['z_rotation_step'].iat[-1].round())}")
             plt.tight_layout()
 
             if save_figs:
