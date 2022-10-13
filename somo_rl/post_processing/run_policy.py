@@ -121,7 +121,8 @@ class Policy_rollout:
         self, model="best_model", from_callbacks=False, num_steps=None, run_render=True, save_vid=False, zero_action=False, seed=None, record_data=True
     ):
         self.env_seed = seed if isinstance(seed, int) else np.random.randint(1000)
-        self.results_ID = self.datetime + f"_s{self.env_seed}"
+        self.object = self.run_config["object"]
+        self.results_ID = self.datetime + f"_s{self.env_seed}" + f"_{self.object}"
         self.env.seed(self.env_seed)
         print(f"\n\nSet seed to {self.env_seed}!")
 

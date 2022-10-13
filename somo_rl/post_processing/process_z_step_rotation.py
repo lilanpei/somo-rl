@@ -34,20 +34,22 @@ def process_z_step_rotation_data(
     for _, res in enumerate(glob.glob(os.path.join(z_step_rotation_data.run_results_dir, "**", "info.pkl"), recursive=True)):
         with open(res, 'rb') as f:
             data = pickle.load(f)
-            plt.plot(data['z_rotation_step'])
-            print(f"Final z rotation : {data['z_rotation_step'].iat[-1]}")
+            dir = (list(res.split(os.sep)))[-2]
+            obj = list(dir.split("_"))[-1]
+            plt.plot(data['z_rotation_step'], label=f"{obj} : {str(data['z_rotation_step'].iat[-1].round())}")
             plt.xlabel("steps")
-            plt.ylabel("z_rotation_step")
-            plt.title(f"Z rotation for {(list(res.split(os.sep)))[-6][4:]} : {str(data['z_rotation_step'].iat[-1].round())}")
-            plt.tight_layout()
+            plt.ylabel("z rotation in degrees")
+            plt.title(f"Rollouts of different objects (the policy was trained for {(list(res.split(os.sep)))[-6][4:]})", fontsize=10)
 
-            if save_figs:
-                print("save to ", res[:-8] + "z_step_rotation.png")
-                plt.savefig(os.path.join(res[:-8], "z_step_rotation.png"))
-                # plt.savefig(os.path.join(res[:-8], "z_step_rotation.eps"), format="eps")
+    plt.legend(prop={'size': 7})
+    plt.tight_layout()
 
-            if not silent:
-                plt.show()
+    if save_figs:
+        plt.savefig(os.path.join(z_step_rotation_data.run_results_dir, "z_step_rotation.png"))
+        # plt.savefig(os.path.join(res[:-8], "z_step_rotation.eps"), format="eps")
+
+    if not silent:
+        plt.show()
 
 
 if __name__ == "__main__":
