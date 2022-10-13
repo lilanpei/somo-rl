@@ -41,6 +41,7 @@ def process_z_step_rotation_data(
             plt.ylabel("z rotation in degrees")
             plt.title(f"Rollouts of different objects (the policy was trained for {(list(res.split(os.sep)))[-6][4:]})", fontsize=10)
 
+    plt.grid()
     plt.legend(prop={'size': 7})
     plt.tight_layout()
 
