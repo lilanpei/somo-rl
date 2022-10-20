@@ -23,11 +23,11 @@ def run_config_generator(path, seed_start, seed_end):
 	        "box_pos": None,
 	        "box_or": None,
 	        "box_velocity": None,
-	        "positions": 4,
-	        "velocities": 4,
-	        "tip_pos": None,
-	        "angles": 4,
-	        "curvatures": 5,
+	        "positions": 10,
+	        "velocities": 10,
+	        # "tip_pos": None,
+	        # "angles": 4,
+	        # "curvatures": 5,
 	        "applied_input_torques": None
 	        }
 	reward_flags = {
