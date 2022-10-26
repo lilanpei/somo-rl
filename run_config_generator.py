@@ -31,7 +31,7 @@ def run_config_generator(path, seed_start, seed_end):
 	        "applied_input_torques": None
 	        }
 	reward_flags = {
-	        "z_rotation_step": 100,
+	        "z_rotation_step": 1000,
 	        "x_rotation": -1,
 	        "y_rotation": -1,
 	        "position": -1
