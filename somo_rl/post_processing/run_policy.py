@@ -204,13 +204,13 @@ class Policy_rollout:
         seed=None
     ):
 
-        if "object" in self.run_config and len(self.run_config["object"]) > 1:
+        if "object" in self.run_config and isinstance(self.objects, list):
             num_runs = len(self.run_config["object"])
         else:
             num_runs = 1
 
         for i in range(num_runs):
-            if "object" in self.run_config and len(self.run_config["object"]) > 1:
+            if "object" in self.run_config and isinstance(self.objects, list):
                 self.run_config["object"] = self.objects[i]
             self.run_rollout(model, from_callbacks, num_steps, run_render, save_vid, zero_action, seed=seed)
 

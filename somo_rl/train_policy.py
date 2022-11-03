@@ -76,7 +76,7 @@ def make_env(
         except:
             seed = rank
 
-        if "object" in run_config and len(run_config["object"]) > 1:
+        if "object" in run_config and isinstance(run_config["object"], list):
             print(f"rank: {rank}, object: {run_config['object'][rank]}")
             run_config["object"] = run_config["object"][rank]
 
@@ -229,7 +229,7 @@ def run(
         num_threads = 1
 
     # Multiple objects to manipulate
-    if "object" in run_config and len(run_config["object"]) > 1:
+    if "object" in run_config and isinstance(run_config["object"], list):
         num_threads = len(run_config["object"])
 
     start_time = time.time()
