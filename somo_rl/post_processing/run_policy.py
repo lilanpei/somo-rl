@@ -42,6 +42,9 @@ class Policy_rollout:
 
         self.run_config = parse_config.validate_config(run_config_file)
 
+        if "object" in self.run_config:
+            self.objects = self.run_config["object"]
+
         # check if it's a benchmark config
         if "action_time" not in self.run_config:
             self.run_config = parse_config.construct_benchmark_config(run_config_file)
@@ -121,8 +124,7 @@ class Policy_rollout:
         self, model="best_model", from_callbacks=False, num_steps=None, run_render=True, save_vid=False, zero_action=False, seed=None, record_data=True
     ):
         self.env_seed = seed if isinstance(seed, int) else np.random.randint(1000)
-        self.object = self.run_config["object"]
-        self.results_ID = self.datetime + f"_s{self.env_seed}" + f"_{self.object}"
+        self.results_ID = self.datetime + f"_s{self.env_seed}" + f"_{self.run_config['object']}"
         self.env.seed(self.env_seed)
         print(f"\n\nSet seed to {self.env_seed}!")
 
@@ -202,25 +204,33 @@ class Policy_rollout:
         seed=None
     ):
 
-        self.run_rollout(model, from_callbacks, num_steps, run_render, save_vid, zero_action, seed=seed)
+        if "object" in self.run_config and len(self.run_config["object"]) > 1:
+            num_runs = len(self.run_config["object"])
+        else:
+            num_runs = 1
 
-        data_dir_ID = self.processed_data_dir / self.results_ID
-        os.makedirs(data_dir_ID)
+        for i in range(num_runs):
+            if "object" in self.run_config and len(self.run_config["object"]) > 1:
+                self.run_config["object"] = self.objects[i]
+            self.run_rollout(model, from_callbacks, num_steps, run_render, save_vid, zero_action, seed=seed)
 
-        # make dataframes
-        reward_df = pd.DataFrame(self.rewards, columns=["step_reward"])
-        reward_components_df = pd.concat([reward_df, pd.DataFrame(self.reward_info)], axis=1)
-        observations_df = pd.DataFrame(self.observations)
-        step_info_df = pd.DataFrame(self.step_info)
-        raw_actions_df = pd.DataFrame(self.actions, columns=[f"action_{i}" for i in range(len(self.actions[0]))])
-        applied_torques_df = pd.DataFrame(self.applied_torques, columns=[f"applied_{i}" for i in range(len(self.actions[0]))])
-        actions_df = pd.concat([raw_actions_df, applied_torques_df], axis=1)
+            data_dir_ID = self.processed_data_dir / self.results_ID
+            os.makedirs(data_dir_ID)
 
-        # save dataframes
-        reward_components_df.to_pickle(data_dir_ID / "reward_components.pkl")
-        observations_df.to_pickle(data_dir_ID / "observations.pkl")
-        step_info_df.to_pickle(data_dir_ID / "info.pkl")
-        actions_df.to_pickle(data_dir_ID / "actions.pkl")
+            # make dataframes
+            reward_df = pd.DataFrame(self.rewards, columns=["step_reward"])
+            reward_components_df = pd.concat([reward_df, pd.DataFrame(self.reward_info)], axis=1)
+            observations_df = pd.DataFrame(self.observations)
+            step_info_df = pd.DataFrame(self.step_info)
+            raw_actions_df = pd.DataFrame(self.actions, columns=[f"action_{i}" for i in range(len(self.actions[0]))])
+            applied_torques_df = pd.DataFrame(self.applied_torques, columns=[f"applied_{i}" for i in range(len(self.actions[0]))])
+            actions_df = pd.concat([raw_actions_df, applied_torques_df], axis=1)
+
+            # save dataframes
+            reward_components_df.to_pickle(data_dir_ID / "reward_components.pkl")
+            observations_df.to_pickle(data_dir_ID / "observations.pkl")
+            step_info_df.to_pickle(data_dir_ID / "info.pkl")
+            actions_df.to_pickle(data_dir_ID / "actions.pkl")
 
 
     def calculate_success_rate(self, model="best_model", num_steps=None, num_runs=10):

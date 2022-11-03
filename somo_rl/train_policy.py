@@ -75,6 +75,11 @@ def make_env(
             seed = run_config["seed"] + rank
         except:
             seed = rank
+
+        if "object" in run_config and len(run_config["object"]) > 1:
+            print(f"rank: {rank}, object: {run_config['object'][rank]}")
+            run_config["object"] = run_config["object"][rank]
+
         if is_eval_env:  # set outside reasonable range of # env ranks
             seed += 100
         set_random_seed(seed)
@@ -222,6 +227,10 @@ def run(
         num_threads = run_config["num_threads"]
     else:
         num_threads = 1
+
+    # Multiple objects to manipulate
+    if "object" in run_config and len(run_config["object"]) > 1:
+        num_threads = len(run_config["object"])
 
     start_time = time.time()
     start_datetime = datetime.now().strftime("%m/%d/%Y %H:%M:%S")

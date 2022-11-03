@@ -47,9 +47,10 @@ def run_config_generator(path, seed_start, seed_end):
 		dir=os.path.join(path, f"seed_{seed}")
 		Path(dir).mkdir(parents=True, exist_ok=True)
 		run_config_dict = {
+			# "object": ["cube", "rect", "cylinder", "cross", "dumbbell", "ball", "banana", "bunny", "duck", "teddy"],
 			"object": (list(path.split("_")))[-1],
 			"action_time": 0.01,
-			"alg": "SAC",
+			"alg": "PPO",  # "SAC",
 			"bullet_time_step": 0.0002,
 			"checkpoint_cb": checkpoint_cb,
 			"env_id": "InHandManipulationInverted-v0",
@@ -59,7 +60,7 @@ def run_config_generator(path, seed_start, seed_end):
 			"max_torque_rate": 130,
 			"num_threads": 1,
 			"observation_flags": observation_flags,
-			"policy": "SACMlpPolicy",
+			"policy": "PPOMlpPolicy",  # "SACMlpPolicy",
 			"reward_flags": reward_flags,
 			"seed": seed,
 			"torque_multiplier": 65,
