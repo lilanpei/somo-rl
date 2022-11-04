@@ -13,10 +13,10 @@ def run_config_generator(path, seed_start, seed_end):
 	3. seed_end: ending value of the range of random seed
 	"""
 	checkpoint_cb = {
-		"save_freq": 20000
+			"save_freq": 50000
 		}
 	eval_cb = {
-		"eval_freq": 2000,
+			"eval_freq": 50000,
 	        "n_eval_episodes": 1
 		}
 	observation_flags = {
@@ -38,9 +38,10 @@ def run_config_generator(path, seed_start, seed_end):
 	        }
 	policy_kwargs = {
 	        "learning_rate": 0.003,
-	        "buffer_size": 500000,
-	        "learning_starts": 1000,
-	        "batch_size": 25
+			"n_steps": 4000,
+	#         "buffer_size": 500000,
+	#         "learning_starts": 1000,
+	#         "batch_size": 25
 	        }
 
 	for seed in range(seed_start, seed_end+1):
@@ -58,13 +59,13 @@ def run_config_generator(path, seed_start, seed_end):
 			"failure_penalty_multiplier": 0,
 			"max_episode_steps": 100,
 			"max_torque_rate": 130,
-			"num_threads": 1,
+			"num_threads": 5,
 			"observation_flags": observation_flags,
 			"policy": "PPOMlpPolicy",  # "SACMlpPolicy",
 			"reward_flags": reward_flags,
 			"seed": seed,
 			"torque_multiplier": 65,
-			"training_timesteps": 500000,
+			"training_timesteps": 10000000,
 			"policy_kwargs": policy_kwargs,
 			"invert_hand": True,
 			"tensorboard_log": os.path.join(dir, "tensorboard_log")
