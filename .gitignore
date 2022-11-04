@@ -149,4 +149,4 @@ dmypy.json
 /test_exp
 
 # User setting
-user_setting.py
+user_settings.py
