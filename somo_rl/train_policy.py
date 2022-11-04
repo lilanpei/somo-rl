@@ -229,12 +229,9 @@ def run(
     else:
         num_threads = 1
 
-    num_objects = 1
-
     # Multiple objects to manipulate
     if "object" in run_config and isinstance(run_config["object"], list):
         num_threads = len(run_config["object"])
-        num_objects = num_threads
 
     start_time = time.time()
     start_datetime = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
@@ -266,12 +263,9 @@ def run(
                 env_id=env_id,
                 run_config=run_config,
                 max_episode_steps=run_config["max_episode_steps"],
-                rank=i,
                 run_ID = deepcopy(run_ID).append("EVAL_ENV")
             )
-            for i in range(num_objects)
-        ],
-        start_method="forkserver",
+        ]
     )
 
     # create callbacks
