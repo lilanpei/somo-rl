@@ -63,7 +63,7 @@ class Policy_rollout:
         self.videos_dir = self.results_dir / "render_vids"
 
         now = datetime.now()
-        self.datetime = now.strftime("%d-%m-%y_%H-%M")
+        self.datetime = now.strftime("%d-%m-%y_%H-%M-%S")
 
         for dir_path in [self.processed_data_dir, self.videos_dir]:
             os.makedirs(dir_path, exist_ok=True)
@@ -157,23 +157,27 @@ class Policy_rollout:
 
         total_reward = 0
         for i in range(num_steps):
-            action, _states = self.model.predict(obs) #, deterministic=True)
+            # action, _states = self.model.predict(obs) #, deterministic=True)
+            action, _states = self.model.predict(obs, deterministic=True)
             # action = list(action[:4]) + [0, 0] + list(action[6:])
         # for i, action_line in actions_df.iterrows():
         #     action = action_line.to_numpy()
             if zero_action:
                 action *= 0
-            obs, rewards, _dones, info = self.env.step(action)
 
             if record_data:
                 print("  * Step: " + str(i))
+                self.observations[i] = deepcopy(obs)
+
+            obs, rewards, _dones, info = self.env.step(action)
+
+            if record_data:
                 print("  * REWARD: " + str(rewards))
                 total_reward += rewards
 
                 print("  * z_rotation: " + (str(info['z_rotation_step']) if 'z_rotation_step' in info else str(np.degrees(info['z_rotation']))))
                 self.actions[i] = deepcopy(action)
                 self.applied_torques[i] = deepcopy(self.env.applied_torque)
-                self.observations[i] = deepcopy(obs)
                 self.step_info[i] = deepcopy(info)
                 self.reward_info[i] = extract_step_reward(prev_total_rewards, info)
                 self.rewards[i] = rewards
