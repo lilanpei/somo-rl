@@ -20,6 +20,7 @@ def run_config_generator(path, seed_start, seed_end):
 	        "n_eval_episodes": 1
 		}
 	observation_flags = {
+			"object_id": None,
 	        "box_pos": None,
 	        "box_or": None,
 	        "box_velocity": None,
