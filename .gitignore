@@ -151,3 +151,5 @@ dmypy.json
 # User setting
 user_settings.py
 somo_rl/post_processing/test.ipynb
+*.zip
+*.npz

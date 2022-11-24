@@ -374,7 +374,7 @@ if __name__ == "__main__":
         "--seed",
         help="Random seed",
         required=False,
-        default=None
+        default=100
     )
 
     parser.add_argument(
@@ -382,7 +382,7 @@ if __name__ == "__main__":
         "--n_eval_episodes",
         help="number of episodes for evaluation",
         required=False,
-        default=None
+        default=10
     )
 
     arg = parser.parse_args()
