@@ -15,6 +15,7 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.env_util import Monitor
 from stable_baselines3.common.callbacks import (
+    BaseCallback,
     CallbackList,
     CheckpointCallback,
     EvalCallback,
@@ -28,6 +29,25 @@ from somo_rl.utils import parse_config, construct_policy_model
 
 from user_settings import EXPERIMENT_ABS_PATH
 import gym
+
+
+class TensorboardCallback(BaseCallback):
+    """
+    Custom callback for plotting z rotation value in tensorboard.
+    """
+
+    def __init__(self, verbose=0):
+        super(TensorboardCallback, self).__init__(verbose)
+
+    def _on_step(self) -> bool:
+        # Log z rotation value
+        info = self.locals["infos"][0]
+        if "z_rotation_step" in info:
+            z_rotation = info["z_rotation_step"]
+        else:
+            z_rotation = info["z_rotation"]
+        self.logger.record("z_rotation", z_rotation)
+        return True
 
 
 def create_note(run_dir, run_ID, start_datetime, note):
@@ -280,7 +300,7 @@ def run(
         save_freq=run_config["checkpoint_cb"]["save_freq"],
         save_path=checkpoints_dir,
     )
-    callback = CallbackList([eval_callback, checkpoint_callback])
+    callback = CallbackList([eval_callback, checkpoint_callback, TensorboardCallback()])
 
     policy_kwargs = {}
     if "policy_kwargs" in run_config:

@@ -38,8 +38,8 @@ def run_config_generator(path, seed_start, seed_end):
 	        "position": -1
 	        }
 	policy_kwargs = {
-	        "learning_rate": 0.003,
-			"n_steps": 4000,
+	        "learning_rate": 0.0006,
+			"n_steps": 2000,
 	#         "buffer_size": 500000,
 	#         "learning_starts": 1000,
 	#         "batch_size": 25
@@ -60,7 +60,7 @@ def run_config_generator(path, seed_start, seed_end):
 			"failure_penalty_multiplier": 0,
 			"max_episode_steps": 100,
 			"max_torque_rate": 130,
-			"num_threads": 5,
+			"num_threads": 1,
 			"observation_flags": observation_flags,
 			"policy": "PPOMlpPolicy",  # "SACMlpPolicy",
 			"reward_flags": reward_flags,
