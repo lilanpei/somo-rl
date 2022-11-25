@@ -82,7 +82,8 @@ class TensorboardCallback(BaseCallback):
     Custom callback for plotting z rotation value in tensorboard.
     """
 
-    def __init__(self, verbose=0):
+    def __init__(self, eval_freq: int, verbose=0):
+        self.eval_freq = eval_freq
         super(TensorboardCallback, self).__init__(verbose)
 
     def _on_step(self) -> bool:
@@ -353,7 +354,9 @@ def run(
         log_dir=models_dir
     )
 
-    tensorboardCallback = TensorboardCallback()
+    tensorboardCallback = TensorboardCallback(
+        eval_freq=run_config["eval_cb"]["eval_freq"]
+    )
 
     if num_threads > 1:
         callback = CallbackList([savebest_callback, checkpoint_callback, tensorboardCallback])
