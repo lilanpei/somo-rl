@@ -41,12 +41,13 @@ class TensorboardCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         # Log z rotation value
-        info = self.locals["infos"][0]
-        if "z_rotation_step" in info:
-            z_rotation = info["z_rotation_step"]
-        else:
-            z_rotation = info["z_rotation"]
-        self.logger.record("z_rotation", z_rotation)
+        if self.n_calls % self.eval_freq == 0:
+            info = self.locals["infos"][0]
+            if "z_rotation_step" in info:
+                z_rotation = info["z_rotation_step"]
+            else:
+                z_rotation = info["z_rotation"]
+            self.logger.record("z_rotation", z_rotation)
         return True
 
 
