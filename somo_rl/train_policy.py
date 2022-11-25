@@ -38,27 +38,27 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
     based on the training reward (in practice, we recommend using ``EvalCallback``).
 
     :param check_freq:
-    :param log_dir: Path to the folder where the model will be saved.
-      It must contain the file created by the ``Monitor`` wrapper.
+    :param monitoring_dir: Path to the folder where the monitoring data wes saved.
+    :param models_dir: Path to the folder where the model will be saved.
     :param verbose: Verbosity level: 0 for no output, 1 for info messages, 2 for debug messages
     """
-    def __init__(self, check_freq: int, log_dir: str, verbose: int = 1):
+    def __init__(self, check_freq: int, monitoring_dir: str, models_dir: str,verbose: int = 1):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.check_freq = check_freq
-        self.log_dir = log_dir
-        self.save_path = os.path.join(log_dir, "best_model")
+        self.monitoring_dir = monitoring_dir
+        self.models_dir = models_dir
         self.best_mean_reward = -np.inf
 
     def _init_callback(self) -> None:
         # Create folder if needed
-        if self.save_path is not None:
-            os.makedirs(self.save_path, exist_ok=True)
+        if self.models_dir is not None:
+            os.makedirs(self.models_dir, exist_ok=True)
 
     def _on_step(self) -> bool:
         if self.n_calls % self.check_freq == 0:
 
           # Retrieve training reward
-          x, y = ts2xy(load_results(self.log_dir), "timesteps")
+          x, y = ts2xy(load_results(self.monitoring_dir), "timesteps")
           if len(x) > 0:
               # Mean training reward over the last 100 episodes
               mean_reward = np.mean(y[-100:])
@@ -71,8 +71,8 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
                   self.best_mean_reward = mean_reward
                   # Example for saving best model
                   if self.verbose >= 1:
-                    print(f"Saving new best model to {self.save_path}")
-                  self.model.save(self.save_path)
+                    print(f"Saving new best model to {self.models_dir}")
+                  self.model.save(self.models_dir)
 
         return True
 
@@ -351,7 +351,8 @@ def run(
 
     savebest_callback = SaveOnBestTrainingRewardCallback(
         check_freq=run_config["eval_cb"]["eval_freq"],
-        log_dir=models_dir
+        monitoring_dir=monitoring_dir,
+        models_dir=models_dir
     )
 
     tensorboardCallback = TensorboardCallback(
