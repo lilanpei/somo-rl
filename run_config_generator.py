@@ -16,7 +16,7 @@ def run_config_generator(path, seed_start, seed_end):
 			"save_freq": 50000
 		}
 	eval_cb = {
-			"eval_freq": 50000,
+			"eval_freq": 10000,
 	        "n_eval_episodes": 1
 		}
 	observation_flags = {
@@ -38,7 +38,7 @@ def run_config_generator(path, seed_start, seed_end):
 	        "position": -1
 	        }
 	policy_kwargs = {
-	        "learning_rate": 0.0006,
+	        "learning_rate": 0.001,
 			"n_steps": 2000,
 	#         "buffer_size": 500000,
 	#         "learning_starts": 1000,
@@ -50,9 +50,10 @@ def run_config_generator(path, seed_start, seed_end):
 		Path(dir).mkdir(parents=True, exist_ok=True)
 		run_config_dict = {
 			# "object": ["cube", "rect", "cylinder", "cross", "dumbbell", "ball", "banana", "bunny", "duck", "teddy"],
+			# "object": ["cube", "rect", "cross"],
 			"object": (list(path.split("_")))[-1],
 			"action_time": 0.01,
-			"alg": "PPO",  # "SAC",
+			"alg": (list(path.split("/")))[-1][:3],
 			"bullet_time_step": 0.0002,
 			"checkpoint_cb": checkpoint_cb,
 			"env_id": "InHandManipulationInverted-v0",
@@ -66,7 +67,7 @@ def run_config_generator(path, seed_start, seed_end):
 			"reward_flags": reward_flags,
 			"seed": seed,
 			"torque_multiplier": 65,
-			"training_timesteps": 10000000,
+			"training_timesteps": 3000000,
 			"policy_kwargs": policy_kwargs,
 			"invert_hand": True,
 			"tensorboard_log": os.path.join(dir, "tensorboard_log")
