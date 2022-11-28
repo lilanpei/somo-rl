@@ -11,7 +11,7 @@ import numpy as np
 
 from pathlib import Path
 
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv#SubprocVecEnv
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.common.env_util import Monitor
@@ -304,7 +304,7 @@ def run(
     create_note(run_dir, run_ID, start_datetime, note)
 
     # Create the vectorized environment
-    train_env = SubprocVecEnv(
+    train_env = DummyVecEnv(  # SubprocVecEnv(
         [
             make_env(
                 env_id=env_id,
@@ -318,14 +318,14 @@ def run(
             )
             for i in range(num_threads)
         ],
-        start_method="forkserver",
+        #start_method="forkserver",
     )
 
     eval_run_ID = deepcopy(run_ID)
     eval_run_ID.append("EVAL_ENV")
 
     # separate evaluation env
-    eval_env = SubprocVecEnv(
+    eval_env = DummyVecEnv(#SubprocVecEnv(
         [
             make_env(
                 env_id=env_id,
@@ -334,6 +334,7 @@ def run(
                 run_ID=eval_run_ID,
                 is_eval_env=True
             )
+            for i in range(num_threads)
         ]
     )
 
