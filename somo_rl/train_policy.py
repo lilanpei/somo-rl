@@ -1,98 +1,26 @@
 import os
-import shutil
-import subprocess
+import gym
 import sys
 import time
-from datetime import datetime
-from copy import deepcopy
-
+import shutil
 import argparse
+import subprocess
 import numpy as np
-
 from pathlib import Path
-
-from stable_baselines3.common.vec_env import DummyVecEnv#SubprocVecEnv
-from stable_baselines3.common.utils import set_random_seed
-from stable_baselines3.common.results_plotter import load_results, ts2xy
+from copy import deepcopy
+from datetime import datetime
 from stable_baselines3.common.env_util import Monitor
-from stable_baselines3.common.callbacks import (
-    BaseCallback,
-    CallbackList,
-    CheckpointCallback,
-    EvalCallback,
-)
+from stable_baselines3.common.utils import set_random_seed
+from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, path)
 
+from user_settings import EXPERIMENT_ABS_PATH
 from somo_rl.utils.import_environment import import_env
 from somo_rl.utils import parse_config, construct_policy_model
-
-from user_settings import EXPERIMENT_ABS_PATH
-import gym
-
-
-class SaveOnBestTrainingRewardCallback(BaseCallback):
-    """
-    Callback for saving a model (the check is done every ``check_freq`` steps)
-    based on the training reward (in practice, we recommend using ``EvalCallback``).
-
-    :param check_freq:
-    :param monitoring_dir: Path to the folder where the monitoring data wes saved.
-    :param models_dir: Path to the folder where the model will be saved.
-    :param verbose: Verbosity level: 0 for no output, 1 for info messages, 2 for debug messages
-    """
-    def __init__(self, check_freq: int, monitoring_dir: str, models_dir: str, verbose: int = 0):
-        super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
-        self.check_freq = check_freq
-        self.monitoring_dir = monitoring_dir
-        self.models_dir = os.path.join(models_dir, "best_model")
-        self.best_mean_reward = -np.inf
-
-    def _on_step(self) -> bool:
-        if self.n_calls % self.check_freq == 0:
-
-            # Retrieve training reward
-            x, y = ts2xy(load_results(self.monitoring_dir), "timesteps")
-            if len(x) > 0:
-                y = y.reshape(-1, self.locals['env'].num_envs).sum(1)
-                # Mean training reward over the last 100 episodes
-                mean_reward = np.mean(y[-100:])
-                self.logger.record("mean_reward", mean_reward)
-                if self.verbose >= 1:
-                    print(f"Num timesteps: {self.num_timesteps}")
-                    print(f"Best mean reward: {self.best_mean_reward:.2f} - Last mean reward per episode: {mean_reward:.2f}")
-
-                # New best model, you could save the agent here
-                if mean_reward > self.best_mean_reward:
-                    self.best_mean_reward = mean_reward
-                    # Example for saving best model
-                    if self.verbose >= 1:
-                        print(f"Saving new best model to {self.models_dir}")
-                    self.model.save(self.models_dir)
-
-        return True
-
-
-class TensorboardCallback(BaseCallback):
-    """
-    Custom callback for plotting z rotation value in tensorboard.
-    """
-
-    def __init__(self, eval_freq: int, verbose=0):
-        self.eval_freq = eval_freq
-        super(TensorboardCallback, self).__init__(verbose)
-
-    def _on_step(self) -> bool:
-        # Log z rotation value
-        if self.n_calls % self.eval_freq == 0:
-            info = self.locals["infos"][0]
-            if "z_rotation_step" in info:
-                z_rotation = info["z_rotation_step"]
-            else:
-                z_rotation = info["z_rotation"]
-            self.logger.record("z_rotation", z_rotation)
-        return True
+from somo_rl.utils.customized_callbacks import Multi_Obj_EvalCallback, SaveOnBestTrainingRewardCallback, TensorboardCallback
 
 
 def create_note(run_dir, run_ID, start_datetime, note):
@@ -304,7 +232,7 @@ def run(
     create_note(run_dir, run_ID, start_datetime, note)
 
     # Create the vectorized environment
-    train_env = DummyVecEnv(  # SubprocVecEnv(
+    train_env = SubprocVecEnv(
         [
             make_env(
                 env_id=env_id,
@@ -318,28 +246,31 @@ def run(
             )
             for i in range(num_threads)
         ],
-        #start_method="forkserver",
+        start_method="forkserver",
     )
 
     eval_run_ID = deepcopy(run_ID)
     eval_run_ID.append("EVAL_ENV")
 
     # separate evaluation env
-    eval_env = DummyVecEnv(#SubprocVecEnv(
+    eval_env = SubprocVecEnv(
         [
             make_env(
                 env_id=env_id,
                 run_config=run_config,
                 max_episode_steps=run_config["max_episode_steps"],
+                rank=i,
                 run_ID=eval_run_ID,
                 is_eval_env=True
             )
             for i in range(num_threads)
-        ]
+        ],
+        start_method="forkserver",
     )
 
     # create callbacks
-    eval_callback = EvalCallback(
+    eval_callback = Multi_Obj_EvalCallback(
+        run_ID,
         eval_env,
         n_eval_episodes=run_config["eval_cb"]["n_eval_episodes"],
         best_model_save_path=models_dir,
@@ -361,10 +292,7 @@ def run(
         eval_freq=run_config["eval_cb"]["eval_freq"]
     )
 
-    if num_threads > 1:
-        callback = CallbackList([savebest_callback, checkpoint_callback, tensorboardCallback])
-    else:
-        callback = CallbackList([eval_callback, checkpoint_callback, tensorboardCallback])
+    callback = CallbackList([eval_callback, checkpoint_callback])
 
     policy_kwargs = {}
     if run_config["alg"] == "PPO":

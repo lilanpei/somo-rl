@@ -30,7 +30,7 @@ def evaluate_policy(model, run_ID, env=None, n_eval_episodes=10, deterministic=T
     episode_count = 0
     while episode_count < n_eval_episodes:
         total_reward = np.zeros(n_envs)
-        obs = env.reset()#
+        obs = env.reset()
         for step in range(num_steps):
             action, _ = model.predict(obs, deterministic=deterministic)
             obs, reward, _, info = env.step(action)
