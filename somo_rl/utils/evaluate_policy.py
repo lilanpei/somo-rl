@@ -12,8 +12,10 @@ from somo_rl.utils.load_run_config_file import load_run_config_file
 
 def evaluate_policy(model, run_ID, env=None, n_eval_episodes=10, deterministic=True, render=False):
     _, run_config = load_run_config_file(run_ID)
+    close = False
     if not env:
         env = load_env(run_config)
+        close = True
 
     num_steps = int(run_config["max_episode_steps"])
 
@@ -49,6 +51,8 @@ def evaluate_policy(model, run_ID, env=None, n_eval_episodes=10, deterministic=T
     std_reward = np.std(episode_rewards)
     mean_z_rotation = np.mean(episode_z_rotations)
     std_z_rotation = np.std(episode_z_rotations)
-    env.close()
+
+    if close:
+        env.close()
 
     return mean_reward, std_reward, mean_z_rotation, std_z_rotation
