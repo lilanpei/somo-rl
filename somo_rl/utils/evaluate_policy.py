@@ -1,51 +1,54 @@
 import os
 import sys
 import numpy as np
-from copy import deepcopy
+from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv
 
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 sys.path.insert(0, path)
 
-from somo_rl.utils.load_run_config_file import load_run_config_file
 from somo_rl.utils.load_env import load_env
+from somo_rl.utils.load_run_config_file import load_run_config_file
 
 
-def evaluate_policy(model, run_ID, n_eval_episodes=10, deterministic=True, render=False):
-
+def evaluate_policy(model, run_ID, env=None, n_eval_episodes=10, deterministic=True, render=False):
     _, run_config = load_run_config_file(run_ID)
-    env = load_env(run_config)
-    episode_rewards, episode_lengths, z_rotations = [], [], []
+    if not env:
+        env = load_env(run_config)
+
     num_steps = int(run_config["max_episode_steps"])
-    while len(episode_rewards) < n_eval_episodes:
-        obs = env.reset(run_render=render)
-        actions = []
-        observations = []
-        rewards = []
-        total_reward = 0
-        observations.append(deepcopy(obs))
-        for i in range(num_steps):
-            action, _states = model.predict(obs, deterministic=deterministic)
-            obs, reward, _dones, info = env.step(action)
+
+    if not isinstance(env, VecEnv):
+        if render:
+            _ = env.reset(run_render=render)
+        env = DummyVecEnv([lambda: env])
+
+    n_envs = env.num_envs
+    episode_rewards = []
+    episode_z_rotations = []
+    episode_count = 0
+    while episode_count < n_eval_episodes:
+        total_reward = np.zeros(n_envs)
+        obs = env.reset()#
+        for step in range(num_steps):
+            action, _ = model.predict(obs, deterministic=deterministic)
+            obs, reward, _, info = env.step(action)
             total_reward += reward
-            actions.append(deepcopy(action))
-            rewards.append(deepcopy(reward))
 
             if render:
                 env.render()
 
-        episode_rewards.append(total_reward)
-
-        if 'z_rotation_step' in info:
-            z_rotation = info['z_rotation_step']
-        else:
-            z_rotation = np.degrees(info['z_rotation'])
-
-        z_rotations.append(z_rotation)
+        for i in range(n_envs):
+            episode_rewards.append(total_reward[i])
+            if 'z_rotation_step' in info[i]:
+                episode_z_rotations.append(info[i]['z_rotation_step'])
+            else:
+                episode_z_rotations.append(np.degrees(info[i]['z_rotation']))
+            episode_count += 1
 
     mean_reward = np.mean(episode_rewards)
     std_reward = np.std(episode_rewards)
-    mean_z_rotation = np.mean(z_rotations)
-    std_z_rotation = np.std(z_rotations)
+    mean_z_rotation = np.mean(episode_z_rotations)
+    std_z_rotation = np.std(episode_z_rotations)
     env.close()
 
     return mean_reward, std_reward, mean_z_rotation, std_z_rotation
