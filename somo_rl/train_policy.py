@@ -326,6 +326,7 @@ def run(
 
     model.save(models_dir / "final_model")
     train_env.close()
+    eval_env.close()
 
     return 0
 
