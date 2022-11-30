@@ -1,7 +1,7 @@
 import os
-import yaml
 import argparse
 from pathlib import Path
+import yaml
 from somo_rl.utils import parse_config
 from user_settings import EXPERIMENT_ABS_PATH
 
@@ -13,10 +13,10 @@ def run_config_generator(path, seed_start, seed_end):
 	3. seed_end: ending value of the range of random seed
 	"""
 	checkpoint_cb = {
-			"save_freq": 50000
+			"save_freq": 40000
 		}
 	eval_cb = {
-			"eval_freq": 10000,
+			"eval_freq": 4000,
 	        "n_eval_episodes": 1
 		}
 	observation_flags = {
@@ -42,7 +42,7 @@ def run_config_generator(path, seed_start, seed_end):
 			"n_steps": 2000,
 	#         "buffer_size": 500000,
 	#         "learning_starts": 1000,
-	#         "batch_size": 25
+	#         "batch_size": 4000 # n_steps * n_envs
 	        }
 
 	for seed in range(seed_start, seed_end+1):
@@ -63,11 +63,11 @@ def run_config_generator(path, seed_start, seed_end):
 			"max_torque_rate": 130,
 			"num_threads": 1,
 			"observation_flags": observation_flags,
-			"policy": "PPOMlpPolicy",  # "SACMlpPolicy",
+			"policy": (list(path.split("/")))[-1][:3]+"MlpPolicy", #"PPOMlpPolicy",  # "SACMlpPolicy",
 			"reward_flags": reward_flags,
 			"seed": seed,
 			"torque_multiplier": 65,
-			"training_timesteps": 3000000,
+			"training_timesteps": 2000000,
 			"policy_kwargs": policy_kwargs,
 			"invert_hand": True,
 			"tensorboard_log": os.path.join(dir, "tensorboard_log")
