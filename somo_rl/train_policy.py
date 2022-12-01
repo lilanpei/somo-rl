@@ -282,15 +282,15 @@ def run(
         save_path=checkpoints_dir,
     )
 
-    savebest_callback = SaveOnBestTrainingRewardCallback(
-        check_freq=run_config["eval_cb"]["eval_freq"],
-        monitoring_dir=monitoring_dir,
-        models_dir=models_dir
-    )
+    # savebest_callback = SaveOnBestTrainingRewardCallback(
+    #     check_freq=run_config["eval_cb"]["eval_freq"],
+    #     monitoring_dir=monitoring_dir,
+    #     models_dir=models_dir
+    # )
 
-    tensorboardCallback = TensorboardCallback(
-        eval_freq=run_config["eval_cb"]["eval_freq"]
-    )
+    # tensorboardCallback = TensorboardCallback(
+    #     eval_freq=run_config["eval_cb"]["eval_freq"]
+    # )
 
     callback = CallbackList([eval_callback, checkpoint_callback])
 
