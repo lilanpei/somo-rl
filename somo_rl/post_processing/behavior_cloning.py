@@ -65,7 +65,7 @@ class Policy_rollout:
             actions_df = pd.concat(actions_df_list)
             observations_df = pd.concat(observations_df_list)
 
-            expert_observations, expert_actions = observations_df.to_numpy(), actions_df.to_numpy()
+            expert_observations, expert_actions = observations_df.to_numpy(dtype=np.double), actions_df.to_numpy(dtype=np.double)
 
             np.savez_compressed(
                 os.path.join(self.run_dir, f"expert_data_{self.run_config['object']}"),
@@ -240,66 +240,101 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
         print(
             f"z rotation student on {expert_policy[idx].run_config['object']} env = {mean_z_rotation_student:.2f} +/- {std_z_rotation_student:.2f}")
 
-    # Prepare the dataset for pretraining
-    print(f"num_experts = {num_experts}")
-    if num_experts > 1:
-        os.makedirs(EXPERT_ABS_PATH, exist_ok=True)
-        saved_pretraining_data_path = os.path.join(EXPERT_ABS_PATH,
-                                                   f"pretraining_data_{'_'.join([expert_policy[idx].run_config['object'] for idx in range(num_experts)])}.npz")
-        if os.path.isfile(saved_pretraining_data_path):
-            expert_observations_dataset, expert_actions_dataset = np.load(saved_pretraining_data_path)[
-                                                                      "expert_observations"], \
-                                                                  np.load(saved_pretraining_data_path)["expert_actions"]
-            print(f"Using saved data from : {saved_pretraining_data_path}")
-        else:
-            print(f"Preparing dataset for pretraining from each expert dataset")
-            expert_actions_dataset = np.concatenate(
-                [expert_policy[i].expert_dataset.actions for i in range(num_experts)], axis=0, dtype=np.double)
-            expert_observations_dataset = np.concatenate(
-                [expert_policy[i].expert_dataset.observations for i in range(num_experts)], axis=0, dtype=np.double)
-
-            np.savez_compressed(
-                os.path.join(EXPERT_ABS_PATH,
-                             f"pretraining_data_{'_'.join([expert_policy[idx].run_config['object'] for idx in range(num_experts)])}"),
-                expert_observations=expert_observations_dataset,
-                expert_actions=expert_actions_dataset,
-            )
-        expert_dataset = ExpertDataSet(expert_observations_dataset, expert_actions_dataset)
-    else:
-        expert_dataset = expert_policy[0].expert_dataset
-
-    # Shuffle the pretraining dataset
     if shuffle:
+        # Prepare the dataset for pretraining
+        print(f"num_experts = {num_experts}")
+        if num_experts > 1:
+            os.makedirs(EXPERT_ABS_PATH, exist_ok=True)
+            saved_pretraining_data_path = os.path.join(EXPERT_ABS_PATH,
+                                                       f"pretraining_data_{'_'.join([expert_policy[idx].run_config['object'] for idx in range(num_experts)])}.npz")
+            if os.path.isfile(saved_pretraining_data_path):
+                expert_observations_dataset, expert_actions_dataset = np.load(saved_pretraining_data_path)[
+                                                                          "expert_observations"], \
+                                                                      np.load(saved_pretraining_data_path)["expert_actions"]
+                print(f"Using saved data from : {saved_pretraining_data_path}")
+            else:
+                print(f"Preparing dataset for pretraining from each expert dataset")
+                expert_actions_dataset = np.concatenate(
+                    [expert_policy[i].expert_dataset.actions for i in range(num_experts)], axis=0, dtype=np.double)
+                expert_observations_dataset = np.concatenate(
+                    [expert_policy[i].expert_dataset.observations for i in range(num_experts)], axis=0, dtype=np.double)
+
+                np.savez_compressed(
+                    os.path.join(EXPERT_ABS_PATH,
+                                 f"pretraining_data_{'_'.join([expert_policy[idx].run_config['object'] for idx in range(num_experts)])}"),
+                    expert_observations=expert_observations_dataset,
+                    expert_actions=expert_actions_dataset,
+                )
+            expert_dataset = ExpertDataSet(expert_observations_dataset, expert_actions_dataset)
+        else:
+            expert_dataset = expert_policy[0].expert_dataset
+
+        # Shuffle the pretraining dataset
         print("Shuffling the pretraining dataset")
         expert_dataset = unison_shuffled_copies(expert_dataset)
 
-    train_size = int(0.8 * len(expert_dataset))
-    test_size = len(expert_dataset) - train_size
+        train_size = int(0.8 * len(expert_dataset))
+        test_size = len(expert_dataset) - train_size
 
-    train_expert_dataset, test_expert_dataset = random_split(
-        expert_dataset, [train_size, test_size]
-    )
-    # train_expert_dataset = test_expert_dataset = expert_dataset
+        train_expert_dataset, test_expert_dataset = random_split(
+            expert_dataset, [train_size, test_size]
+        )
+        # train_expert_dataset = test_expert_dataset = expert_dataset
 
-    print(f"train dataset for pretraining: {len(train_expert_dataset)}")
-    print(f"test dataset for pretraining: {len(test_expert_dataset)}")
+        print(f"train dataset for pretraining: {len(train_expert_dataset)}")
+        print(f"test dataset for pretraining: {len(test_expert_dataset)}")
 
-    # Pretrain the student agent
-    pretrain_agent = Pretrain_agent(student, train_expert_dataset, test_expert_dataset)
-    student_save_path = os.path.join(EXPERT_ABS_PATH,
-                                     f"student_{'_'.join([expert_policy[idx].run_config['object'] for idx in range(num_experts)])}")
-    student.save(student_save_path)
-    print(f"Saving agent at: {student_save_path}")
+        # Pretrain the student agent
+        pretrain_agent = Pretrain_agent(student, train_expert_dataset, test_expert_dataset)
+        student_save_path = os.path.join(EXPERT_ABS_PATH,
+                                         f"student_{'_'.join([expert_policy[idx].run_config['object'] for idx in range(num_experts)])}")
+        student.save(student_save_path)
+        print(f"Saving agent at: {student_save_path}")
 
-    # Evaluate the trained student policy
-    for idx in range(num_experts):
-        mean_reward_student, std_reward_student, mean_z_rotation_student, std_z_rotation_student = evaluate_policy(
-            model=pretrain_agent.student, run_ID=run_IDs[idx], n_eval_episodes=n_eval_episodes, deterministic=False,
-            render=render)
-        print(
-            f"Mean reward student on {expert_policy[idx].run_config['object']} env = {mean_reward_student:.2f} +/- {std_reward_student:.2f}")
-        print(
-            f"z rotation student on {expert_policy[idx].run_config['object']} env = {mean_z_rotation_student:.2f} +/- {std_z_rotation_student:.2f}")
+        # Evaluate the trained student policy
+        for idx in range(num_experts):
+            mean_reward_student, std_reward_student, mean_z_rotation_student, std_z_rotation_student = evaluate_policy(
+                model=pretrain_agent.student, run_ID=run_IDs[idx], n_eval_episodes=n_eval_episodes, deterministic=False,
+                render=render)
+            print(
+                f"Mean reward student on {expert_policy[idx].run_config['object']} env = {mean_reward_student:.2f} +/- {std_reward_student:.2f}")
+            print(
+                f"z rotation student on {expert_policy[idx].run_config['object']} env = {mean_z_rotation_student:.2f} +/- {std_z_rotation_student:.2f}")
+    else:
+        print(f"num_experts = {num_experts}")
+        for idx in range(num_experts):
+            os.makedirs(EXPERT_ABS_PATH, exist_ok=True)
+            expert_dataset = expert_policy[idx].expert_dataset
+
+            train_size = int(0.8 * len(expert_dataset))
+            test_size = len(expert_dataset) - train_size
+
+            train_expert_dataset, test_expert_dataset = random_split(
+                expert_dataset, [train_size, test_size]
+            )
+            # train_expert_dataset = test_expert_dataset = expert_dataset
+
+            print(
+                f"{expert_policy[idx].run_config['object']} train dataset for pretraining: {len(train_expert_dataset)}")
+            print(f"{expert_policy[idx].run_config['object']} test dataset for pretraining: {len(test_expert_dataset)}")
+
+            # Pretrain the student agent
+            pretrain_agent = Pretrain_agent(student, train_expert_dataset, test_expert_dataset)
+            student_save_path = os.path.join(EXPERT_ABS_PATH,
+                                             f"student_{'_'.join([expert_policy[i].run_config['object'] for i in range(num_experts)])}_{idx}")
+            student.save(student_save_path)
+            print(f"Saving student agent {idx} at: {student_save_path}")
+
+            # Evaluate the trained student policy
+            for i in range(num_experts):
+                mean_reward_student, std_reward_student, mean_z_rotation_student, std_z_rotation_student = evaluate_policy(
+                    model=pretrain_agent.student, run_ID=run_IDs[i], n_eval_episodes=n_eval_episodes,
+                    deterministic=False,
+                    render=render)
+                print(
+                    f"Mean reward student on {expert_policy[i].run_config['object']} env = {mean_reward_student:.2f} +/- {std_reward_student:.2f}")
+                print(
+                    f"z rotation student on {expert_policy[i].run_config['object']} env = {mean_z_rotation_student:.2f} +/- {std_z_rotation_student:.2f}")
 
 
 if __name__ == "__main__":
