@@ -298,9 +298,8 @@ def run(
     if run_config["alg"] == "PPO":
         if "policy_kwargs" not in run_config:
             run_config["policy_kwargs"] = {"n_steps": 2000}
-        if "n_steps" in run_config["policy_kwargs"]:
-            run_config["policy_kwargs"]["batch_size"] = run_config["policy_kwargs"]["n_steps"] * num_threads
-
+        if "n_steps" in run_config["policy_kwargs"] and "batch_size" not in run_config["policy_kwargs"]:
+            run_config["policy_kwargs"]["batch_size"] = run_config["policy_kwargs"]["n_steps"] // 20 # a factor of n_steps * n_envs
     if "policy_kwargs" in run_config:
         policy_kwargs = deepcopy(run_config["policy_kwargs"])
 
