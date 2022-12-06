@@ -196,23 +196,24 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
     for idx in range(num_experts):
         expert_policy.append(Policy_rollout(exp_abs_path=exp_abs_path, run_ID=run_IDs[idx], render=render, debug=debug))
 
-    # Evaluate the expert trained for multi-objects manipulation
-    # baseline_runID = [run_IDs[0][0], "PPO_multi_objects", run_IDs[0][-1]]
-    baseline_run_group_name = (list(run_IDs[0][1].split("_")))[0] + "_" + "_".join([(list(run_IDs[i][1].split("_")))[-1] for i in range(num_experts)])
-    baseline_runID = [run_IDs[0][0], baseline_run_group_name, run_IDs[0][-1]]
-    try:
-        baseline_run_dir, baseline_run_config = load_run_config_file(baseline_runID)
-        for i in range(num_experts):
-            alg = construct_policy_model.ALGS[expert_policy[i].run_config["alg"]]
-            mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
-                model=alg.load(os.path.join(baseline_run_dir, "models/best_model")), run_ID=run_IDs[i],
-                n_eval_episodes=n_eval_episodes, deterministic=False, render=render)
-            print(
-                f"Mean reward {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
-            print(
-                f"z rotation {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_z_rotation_expert:.2f} +/- {std_z_rotation_expert:.2f}")
-    except:
-        print(f"Exception : The expert trained for multi-objects manipulation does not exist : {baseline_runID}")
+    if num_experts > 1:
+        # Evaluate the expert trained for multi-objects manipulation
+        # baseline_runID = [run_IDs[0][0], "PPO_multi_objects", run_IDs[0][-1]]
+        baseline_run_group_name = (list(run_IDs[0][1].split("_")))[0] + "_" + "_".join([(list(run_IDs[i][1].split("_")))[-1] for i in range(num_experts)])
+        baseline_runID = [run_IDs[0][0], baseline_run_group_name, run_IDs[0][-1]]
+        try:
+            baseline_run_dir, baseline_run_config = load_run_config_file(baseline_runID)
+            for i in range(num_experts):
+                alg = construct_policy_model.ALGS[expert_policy[i].run_config["alg"]]
+                mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
+                    model=alg.load(os.path.join(baseline_run_dir, "models/best_model")), run_ID=run_IDs[i],
+                    n_eval_episodes=n_eval_episodes, deterministic=False, render=render)
+                print(
+                    f"Mean reward {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
+                print(
+                    f"z rotation {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_z_rotation_expert:.2f} +/- {std_z_rotation_expert:.2f}")
+        except:
+            print(f"Exception : The expert trained for multi-objects manipulation does not exist : {baseline_runID}")
 
     # Evaluate the expert trained for individual-object manipulation
     for idx in range(num_experts):
