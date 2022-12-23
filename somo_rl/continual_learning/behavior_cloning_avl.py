@@ -150,8 +150,7 @@ class mymodel(nn.Module):
         else:
             # SAC/TD3:
             action = self.model(input)
-        action_prediction = action.double()
-        return action_prediction
+        return action
 
 
 class Pretrain_agent:
@@ -165,13 +164,13 @@ class Pretrain_agent:
                  render,
                  expert_objects,
                  batch_size=1,
-                 epochs=3,
+                 epochs=10,
                  scheduler_gamma=0.7,
                  learning_rate=1,
                  no_cuda=True,
                  seed=1,
                  test_batch_size=2,
-                 ewc_lambda=2250,
+                 ewc_lambda=3000,
                  ):
         self.student = student
         self.scenario = scenario
@@ -477,6 +476,27 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
+        "-e4",
+        "--exp_name_4",
+        help="Experiment name 4",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        "-g4",
+        "--run_group_name_4",
+        help="Run-group name 4",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        "-r4",
+        "--run_name_4",
+        help="Run Name 4",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
         "--exp_abs_path",
         help="Experiment directory absolute path",
         required=False,
@@ -532,5 +552,8 @@ if __name__ == "__main__":
     if arg.exp_name_3 and arg.run_group_name_3 and arg.run_name_3:
         run_ID_3 = [arg.exp_name_3, arg.run_group_name_3, arg.run_name_3]
         run_IDs.append(run_ID_3)
+    if arg.exp_name_4 and arg.run_group_name_4 and arg.run_name_4:
+        run_ID_4 = [arg.exp_name_4, arg.run_group_name_4, arg.run_name_4]
+        run_IDs.append(run_ID_4)
 
     run(run_IDs=run_IDs, exp_abs_path=arg.exp_abs_path, render=arg.render, seed=seed, n_eval_episodes=n_eval_episodes, strategy_name=arg.strategies)
