@@ -13,11 +13,11 @@ def run_config_generator(path, seed_start, seed_end):
 	3. seed_end: ending value of the range of random seed
 	"""
 	checkpoint_cb = {
-			"save_freq": 50000
+			"save_freq": 100000
 		}
 	eval_cb = {
-			"eval_freq": 50000,
-	        "n_eval_episodes": 1
+			"eval_freq": 20000,
+	        "n_eval_episodes": 10
 		}
 	observation_flags = {
 			"object_id": None,
@@ -38,8 +38,8 @@ def run_config_generator(path, seed_start, seed_end):
 	        "position": -1
 	        }
 	policy_kwargs = {
-	#        "learning_rate": 0.001, #0.0003
-			"n_steps": 2000,
+	        "learning_rate": 0.001,
+			"n_steps": 20000,
 	#         "buffer_size": 500000,
 	#         "learning_starts": 1000,
 	         "batch_size": 100 # a factor of n_steps * n_envs
@@ -51,6 +51,8 @@ def run_config_generator(path, seed_start, seed_end):
 		run_config_dict = {
 			# "object": ["cube", "rect", "cylinder", "cross", "dumbbell", "ball", "banana", "bunny", "duck", "teddy"],
 			# "object": ["cube", "rect", "cross"],
+			# "object": ["cube", "rect", "cylinder"],
+			# "object": ["cube", "rect", "cross", "bunny", "teddy"],
 			"object": (list(path.split("_")))[-1],
 			"action_time": 0.01,
 			"alg": (list(path.split("/")))[-1][:3],
@@ -61,13 +63,13 @@ def run_config_generator(path, seed_start, seed_end):
 			"failure_penalty_multiplier": 0,
 			"max_episode_steps": 100,
 			"max_torque_rate": 130,
-			"num_threads": 1,
+			"num_threads": 5,
 			"observation_flags": observation_flags,
 			"policy": (list(path.split("/")))[-1][:3]+"MlpPolicy", #"PPOMlpPolicy",  # "SACMlpPolicy",
 			"reward_flags": reward_flags,
 			"seed": seed,
 			"torque_multiplier": 65,
-			"training_timesteps": 5000000,
+			"training_timesteps": 100000000,
 			"policy_kwargs": policy_kwargs,
 			"invert_hand": True,
 			"tensorboard_log": os.path.join(dir, "tensorboard_log")
