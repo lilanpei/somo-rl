@@ -157,8 +157,8 @@ class Policy_rollout:
 
         total_reward = 0
         for i in range(num_steps):
-            # action, _states = self.model.predict(obs) #, deterministic=True)
-            action, _states = self.model.predict(obs, deterministic=True)
+            action, _states = self.model.predict(obs) #, deterministic=True)
+            # action, _states = self.model.predict(obs, deterministic=True)
             # action = list(action[:4]) + [0, 0] + list(action[6:])
         # for i, action_line in actions_df.iterrows():
         #     action = action_line.to_numpy()

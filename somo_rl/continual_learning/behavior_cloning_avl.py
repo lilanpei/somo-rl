@@ -167,7 +167,7 @@ class Pretrain_agent:
                  epochs=10,
                  scheduler_gamma=0.7,
                  learning_rate=1,
-                 no_cuda=True,
+                 no_cuda=False,
                  seed=1,
                  test_batch_size=2,
                  ewc_lambda=3000,

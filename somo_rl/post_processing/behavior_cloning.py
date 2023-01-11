@@ -347,6 +347,7 @@ if __name__ == "__main__":
         required=True,
         default=None,
     )
+
     parser.add_argument(
         "-g1",
         "--run_group_name_1",
@@ -354,6 +355,7 @@ if __name__ == "__main__":
         required=True,
         default=None,
     )
+
     parser.add_argument(
         "-r1",
         "--run_name_1",
@@ -361,6 +363,7 @@ if __name__ == "__main__":
         required=True,
         default=None,
     )
+
     parser.add_argument(
         "-e2",
         "--exp_name_2",
@@ -368,6 +371,7 @@ if __name__ == "__main__":
         required=False,
         default=None,
     )
+
     parser.add_argument(
         "-g2",
         "--run_group_name_2",
@@ -375,6 +379,7 @@ if __name__ == "__main__":
         required=False,
         default=None,
     )
+
     parser.add_argument(
         "-r2",
         "--run_name_2",
@@ -382,6 +387,7 @@ if __name__ == "__main__":
         required=False,
         default=None,
     )
+
     parser.add_argument(
         "-e3",
         "--exp_name_3",
@@ -389,6 +395,7 @@ if __name__ == "__main__":
         required=False,
         default=None,
     )
+
     parser.add_argument(
         "-g3",
         "--run_group_name_3",
@@ -396,6 +403,7 @@ if __name__ == "__main__":
         required=False,
         default=None,
     )
+
     parser.add_argument(
         "-r3",
         "--run_name_3",
@@ -403,6 +411,31 @@ if __name__ == "__main__":
         required=False,
         default=None,
     )
+
+    parser.add_argument(
+        "-e4",
+        "--exp_name_4",
+        help="Experiment name 4",
+        required=False,
+        default=None,
+    )
+
+    parser.add_argument(
+        "-g4",
+        "--run_group_name_4",
+        help="Run-group name 4",
+        required=False,
+        default=None,
+    )
+
+    parser.add_argument(
+        "-r4",
+        "--run_name_4",
+        help="Run Name 4",
+        required=False,
+        default=None,
+    )
+
     parser.add_argument(
         "--exp_abs_path",
         help="Experiment directory absolute path",
@@ -451,5 +484,8 @@ if __name__ == "__main__":
     if arg.exp_name_3 and arg.run_group_name_3 and arg.run_name_3:
         run_ID_3 = [arg.exp_name_3, arg.run_group_name_3, arg.run_name_3]
         run_IDs.append(run_ID_3)
+    if arg.exp_name_4 and arg.run_group_name_4 and arg.run_name_4:
+        run_ID_4 = [arg.exp_name_4, arg.run_group_name_4, arg.run_name_4]
+        run_IDs.append(run_ID_4)
 
     run(run_IDs=run_IDs, exp_abs_path=arg.exp_abs_path, render=arg.render, seed=seed, n_eval_episodes=n_eval_episodes, shuffle=arg.shuffle)
