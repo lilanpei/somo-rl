@@ -83,7 +83,7 @@ class Pretrain_agent:
                  train_expert_dataset,
                  test_expert_dataset,
                  batch_size=64,
-                 epochs=1,
+                 epochs=10,
                  scheduler_gamma=0.7,
                  learning_rate=1.0,
                  log_interval=100,
