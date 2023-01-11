@@ -153,3 +153,6 @@ user_settings.py
 somo_rl/post_processing/test.ipynb
 *.zip
 *.npz
+*.txt
+*.patch
+/tb_data
