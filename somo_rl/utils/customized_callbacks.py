@@ -22,7 +22,7 @@ class Obs_Img_NN(nn.Module):
     def __init__(self):
         super(Obs_Img_NN, self).__init__()
         self.model = nn.Sequential(
-            nn.Linear(268+64, 268),
+            nn.Linear(268+8, 268),
             nn.Tanh(),
             nn.Linear(268, 268),
             nn.Tanh(),
@@ -266,14 +266,14 @@ class Observation_imagination_Callback(BaseCallback):
     Train a model that takes the (obs, action) as input and output the new obs.
     """
 
-    def __init__(self, models_dir: str, save_freq: int, device: Union[th.device, str] = "mps", verbose=0):
+    def __init__(self, models_dir: str, save_freq: int, device: Union[th.device, str] = "cuda", verbose=0):
         super(Observation_imagination_Callback, self).__init__(verbose)
         self.models_dir = os.path.join(models_dir, "obs_model")
         self.save_freq = save_freq
         self.obs_tensor_path = os.path.join(models_dir, "obs_tensor")
         self.criterion = nn.MSELoss()
-        self.learning_rate = 0.0001
-        self.epochs = 10
+        self.learning_rate = 0.1
+        self.epochs = 20
         self.device = device
         self.obs_img_model = Obs_Img_NN().to(self.device)
         self.optimizer = optim.Adadelta(self.obs_img_model.parameters(), lr=self.learning_rate)
@@ -281,36 +281,36 @@ class Observation_imagination_Callback(BaseCallback):
     def train(self, train_loader):
 
         for batch_idx, (data, target) in enumerate(train_loader):
-            data, obs_target = data.to(self.device), target.to(self.device)
             self.optimizer.zero_grad()
+            observation = self.obs_img_model(data.to(th.float32))
 
-            observation = self.model(data)
-            observation_prediction = observation.double()
-
-            loss = self.criterion(observation_prediction, obs_target)
+            loss = self.criterion(observation, target.to(th.float32))
             loss.backward()
             self.optimizer.step()
-        print(f"Loss: {loss.item():.6f}")
+
+        return loss
 
     def _on_step(self) -> bool:
-        print(f"@@@@@@ n_steps: {self.locals['n_steps']}, obs_tensor: {self.locals['obs_tensor'].shape}, new_obs: {self.locals['new_obs'].shape}, actions: {self.locals['actions'].shape}")
+        # print(f"@@@@@@ n_steps: {self.locals['n_steps']}, obs_tensor: {self.locals['obs_tensor'].shape}, new_obs: {self.locals['new_obs'].shape}, actions: {self.locals['actions'].shape}")
         num_envs = self.locals['actions'].shape[0]
         if self.locals['n_steps'] == 0:
-            print(f"@@@@@@ SAVE obs_tensor to {self.obs_tensor_path}")
+            # print(f"@@@@@@ SAVE obs_tensor to {self.obs_tensor_path}")
             th.save(self.locals['obs_tensor'].tolist()[0], self.obs_tensor_path)
 
-        input_data = th.cat((self.locals['obs_tensor'], th.from_numpy(self.locals['actions'])), -1)
-        target_data = th.from_numpy(self.locals['new_obs'])
-        print(f"@@@@@@ input shape: {input_data.shape}, target shape {target_data.shape}")
+        input_data = th.cat((self.locals['obs_tensor'].to(self.device), th.from_numpy(self.locals['actions']).to(self.device)), -1)
+        target_data = th.from_numpy(self.locals['new_obs']).to(self.device)
+        # print(f"@@@@@@ input shape: {input_data.shape}, target shape {target_data.shape}")
 
         dataset = th.utils.data.TensorDataset(input_data, target_data)
         train_loader = th.utils.data.DataLoader(dataset=dataset, batch_size=num_envs, shuffle=False)
 
         for epoch in range(1, self.epochs + 1):
-            self.train(train_loader)
-            print(f"Train Epoch: {epoch}")
+            loss = self.train(train_loader)
+            # print(f"obs_img_model Training Step: {self.locals['n_steps']}, Epoch: {epoch}, Loss: {loss.item():.6f}")
  
+        self.logger.record("obs_img_loss", loss.item())
+
         if self.n_calls % self.save_freq == 0:
-            self.obs_img_model.save(self.obs_img_model)
+            th.save(self.obs_img_model, self.models_dir)
 
         return True
