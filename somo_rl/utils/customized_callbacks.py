@@ -1,6 +1,9 @@
 import os
 import gym
 import sys
+import torch as th
+from torch import nn
+from torch import optim
 import warnings
 import numpy as np
 
@@ -13,6 +16,22 @@ path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 sys.path.insert(0, path)
 
 from somo_rl.utils.evaluate_policy import evaluate_policy
+
+
+class Obs_Img_NN(nn.Module):
+    def __init__(self):
+        super(Obs_Img_NN, self).__init__()
+        self.model = nn.Sequential(
+            nn.Linear(268+64, 268),
+            nn.Tanh(),
+            nn.Linear(268, 268),
+            nn.Tanh(),
+            nn.Linear(268, 268),
+        )
+
+    def forward(self, x):
+        output = self.model(x)
+        return output
 
 
 class Multi_Obj_EvalCallback(EventCallback):
@@ -241,3 +260,57 @@ class TensorboardCallback(BaseCallback):
             self.logger.record("z_rotation", z_rotation)
         return True
 
+
+class Observation_imagination_Callback(BaseCallback):
+    """
+    Train a model that takes the (obs, action) as input and output the new obs.
+    """
+
+    def __init__(self, models_dir: str, save_freq: int, device: Union[th.device, str] = "mps", verbose=0):
+        super(Observation_imagination_Callback, self).__init__(verbose)
+        self.models_dir = os.path.join(models_dir, "obs_model")
+        self.save_freq = save_freq
+        self.obs_tensor_path = os.path.join(models_dir, "obs_tensor")
+        self.criterion = nn.MSELoss()
+        self.learning_rate = 0.0001
+        self.epochs = 10
+        self.device = device
+        self.obs_img_model = Obs_Img_NN().to(self.device)
+        self.optimizer = optim.Adadelta(self.obs_img_model.parameters(), lr=self.learning_rate)
+
+    def train(self, train_loader):
+
+        for batch_idx, (data, target) in enumerate(train_loader):
+            data, obs_target = data.to(self.device), target.to(self.device)
+            self.optimizer.zero_grad()
+
+            observation = self.model(data)
+            observation_prediction = observation.double()
+
+            loss = self.criterion(observation_prediction, obs_target)
+            loss.backward()
+            self.optimizer.step()
+        print(f"Loss: {loss.item():.6f}")
+
+    def _on_step(self) -> bool:
+        print(f"@@@@@@ n_steps: {self.locals['n_steps']}, obs_tensor: {self.locals['obs_tensor'].shape}, new_obs: {self.locals['new_obs'].shape}, actions: {self.locals['actions'].shape}")
+        num_envs = self.locals['actions'].shape[0]
+        if self.locals['n_steps'] == 0:
+            print(f"@@@@@@ SAVE obs_tensor to {self.obs_tensor_path}")
+            th.save(self.locals['obs_tensor'].tolist()[0], self.obs_tensor_path)
+
+        input_data = th.cat((self.locals['obs_tensor'], th.from_numpy(self.locals['actions'])), -1)
+        target_data = th.from_numpy(self.locals['new_obs'])
+        print(f"@@@@@@ input shape: {input_data.shape}, target shape {target_data.shape}")
+
+        dataset = th.utils.data.TensorDataset(input_data, target_data)
+        train_loader = th.utils.data.DataLoader(dataset=dataset, batch_size=num_envs, shuffle=False)
+
+        for epoch in range(1, self.epochs + 1):
+            self.train(train_loader)
+            print(f"Train Epoch: {epoch}")
+ 
+        if self.n_calls % self.save_freq == 0:
+            self.obs_img_model.save(self.obs_img_model)
+
+        return True
