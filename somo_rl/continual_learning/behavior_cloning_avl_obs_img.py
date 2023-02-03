@@ -33,12 +33,15 @@ from somo_rl.utils.load_run_config_file import load_run_config_file
 
 
 class Policy_rollout:
-    def __init__(self, exp_abs_path, run_ID, render=False, debug=False):
+    def __init__(self, exp_abs_path, run_ID, no_cuda=False, render=False, debug=False):
         self.expert_dataset = None
         self.train_expert_dataset = None
         self.test_expert_dataset = None
         self.run_dir, self.run_config = load_run_config_file(run_ID=run_ID, exp_abs_path=exp_abs_path)
         self.env = load_env(self.run_config, render=render, debug=debug)
+        self.no_cuda = no_cuda
+        self.use_cuda = not self.no_cuda and th.cuda.is_available()
+        self.device = th.device("cuda" if self.use_cuda else "cpu")
         self.load_rollouts()
 
     def load_rollouts(self):
@@ -51,18 +54,19 @@ class Policy_rollout:
             print(f"Preparing data from the rl_model and obs_img_model from: {models_dir}")
             list_observations = []
             list_actions = []
-            obs = th.load(os.path.join(models_dir, "obs_tensor"))
-            obs_img_model = th.load(os.path.join(models_dir, "obs_img_model"))
+            obs = th.load(os.path.join(models_dir, "obs_tensor"))#.to(self.device)
+            obs_img_model = th.load(os.path.join(models_dir, "obs_model")).to("cpu")
             alg = construct_policy_model.ALGS[self.run_config["alg"]]
             rl_model = alg.load(os.path.join(models_dir, "best_model"))
             for i in tqdm(range(self.run_config["max_episode_steps"])):
-                action, _ = rl_model.predict(obs, deterministic=False)
+                action, _ = rl_model.predict(th.tensor(obs), deterministic=True)
+                obs, action = th.tensor(obs), th.tensor(action)
                 input_data = th.cat((obs, action), -1)
-                obs = obs_img_model.predict(input_data)
+                obs = obs_img_model(input_data)
                 list_observations.append(obs)
                 list_actions.append(action)
 
-            expert_observations, expert_actions = list_observations.to_numpy(), list_actions.to_numpy()
+            expert_observations, expert_actions = (th.stack(list_observations)).detach().numpy(), (th.stack(list_actions)).detach().numpy()
 
             np.savez_compressed(
                 os.path.join(self.run_dir, f"expert_data_{self.run_config['object']}"),
@@ -70,6 +74,7 @@ class Policy_rollout:
                 expert_actions=expert_actions,
             )
 
+        #print(expert_observations.shape, expert_actions.shape)
         self.expert_dataset = as_regression_dataset(AvalancheTensorDataset(th.tensor(expert_observations), th.tensor(expert_actions)))
         print(f"size of expert_dataset_{self.run_config['object']}: {len(self.expert_dataset)}")
 
