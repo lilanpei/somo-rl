@@ -54,17 +54,19 @@ class Policy_rollout:
             print(f"Preparing data from the rl_model and obs_img_model from: {models_dir}")
             list_observations = []
             list_actions = []
-            obs = th.load(os.path.join(models_dir, "obs_tensor"))#.to(self.device)
-            obs_img_model = th.load(os.path.join(models_dir, "obs_model")).to("cpu")
+            obs_img_model = th.load(os.path.join(models_dir, "obs_model"), map_location=th.device('cpu'))
             alg = construct_policy_model.ALGS[self.run_config["alg"]]
             rl_model = alg.load(os.path.join(models_dir, "best_model"))
-            for i in tqdm(range(self.run_config["max_episode_steps"])):
-                action, _ = rl_model.predict(th.tensor(obs), deterministic=True)
-                obs, action = th.tensor(obs), th.tensor(action)
-                input_data = th.cat((obs, action), -1)
-                obs = obs_img_model(input_data)
-                list_observations.append(obs)
-                list_actions.append(action)
+            for i in tqdm(range(10000)):
+                obs = th.load(os.path.join(models_dir, "obs_tensor"), map_location=th.device('cpu'))#.to(self.device)
+                for i in range(self.run_config["max_episode_steps"]):
+                    obs = th.tensor(obs)
+                    action, _ = rl_model.predict(obs, deterministic=False)
+                    action = th.tensor(action)
+                    input_data = th.cat((obs, action), -1)
+                    obs = obs_img_model(input_data)
+                    list_observations.append(obs)
+                    list_actions.append(action)
 
             expert_observations, expert_actions = (th.stack(list_observations)).detach().numpy(), (th.stack(list_actions)).detach().numpy()
 
