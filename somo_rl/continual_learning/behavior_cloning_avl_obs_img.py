@@ -45,7 +45,8 @@ class Policy_rollout:
         self.load_rollouts()
 
     def load_rollouts(self):
-        saved_data_path = os.path.join(self.run_dir, f"expert_data_{self.run_config['object']}")
+        saved_data_path = os.path.join(self.run_dir, f"expert_data_{self.run_config['object']}.npz")
+        print(f"@@@@@@@@ {saved_data_path} : {os.path.isfile(saved_data_path)}")
         if os.path.isfile(saved_data_path):
             expert_observations, expert_actions = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"]
             print(f"Using saved data from : {saved_data_path}")
@@ -57,8 +58,8 @@ class Policy_rollout:
             obs_img_model = th.load(os.path.join(models_dir, "obs_model"), map_location=th.device('cpu'))
             alg = construct_policy_model.ALGS[self.run_config["alg"]]
             rl_model = alg.load(os.path.join(models_dir, "best_model"))
-            for i in tqdm(range(10000)):
-                obs = th.load(os.path.join(models_dir, "obs_tensor"), map_location=th.device('cpu'))#.to(self.device)
+            for i in tqdm(range(1000)):
+                obs = th.load(os.path.join(models_dir, "obs_tensor"), map_location=th.device('cpu'))
                 for i in range(self.run_config["max_episode_steps"]):
                     obs = th.tensor(obs)
                     action, _ = rl_model.predict(obs, deterministic=False)

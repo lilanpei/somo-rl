@@ -27,6 +27,8 @@ class Obs_Img_NN(nn.Module):
             nn.Linear(268, 268),
             nn.Tanh(),
             nn.Linear(268, 268),
+            nn.Tanh(),
+            nn.Linear(268, 268),
         )
 
     def forward(self, x):
@@ -272,8 +274,8 @@ class Observation_imagination_Callback(BaseCallback):
         self.save_freq = save_freq
         self.obs_tensor_path = os.path.join(models_dir, "obs_tensor")
         self.criterion = nn.MSELoss()
-        self.learning_rate = 0.1
-        self.epochs = 20
+        self.learning_rate = 0.001
+        self.epochs = 50
         self.device = device
         self.obs_img_model = Obs_Img_NN().to(self.device)
         self.optimizer = optim.Adadelta(self.obs_img_model.parameters(), lr=self.learning_rate)
