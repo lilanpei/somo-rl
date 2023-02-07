@@ -268,7 +268,7 @@ class Observation_imagination_Callback(BaseCallback):
     Train a model that takes the (obs, action) as input and output the new obs.
     """
 
-    def __init__(self, models_dir: str, save_freq: int, device: Union[th.device, str] = "cuda", verbose=0):
+    def __init__(self, models_dir: str, save_freq: int, device: Union[th.device, str] = "cuda" if th.cuda.is_available() else "cpu", verbose=0):
         super(Observation_imagination_Callback, self).__init__(verbose)
         self.models_dir = os.path.join(models_dir, "obs_model")
         self.save_freq = save_freq
@@ -293,26 +293,27 @@ class Observation_imagination_Callback(BaseCallback):
         return loss
 
     def _on_step(self) -> bool:
+        # print(f"@@@@@@ locals: {self.locals}")
         # print(f"@@@@@@ n_steps: {self.locals['n_steps']}, obs_tensor: {self.locals['obs_tensor'].shape}, new_obs: {self.locals['new_obs'].shape}, actions: {self.locals['actions'].shape}")
         num_envs = self.locals['actions'].shape[0]
         if self.locals['n_steps'] == 0:
-            # print(f"@@@@@@ SAVE obs_tensor to {self.obs_tensor_path}")
-            th.save(self.locals['obs_tensor'].tolist()[0], self.obs_tensor_path)
+            # print(f"@@@@@@ SAVE new_obs to {self.obs_tensor_path}")
+            th.save(self.locals['new_obs'].tolist()[0], self.obs_tensor_path)
+        else:
+            input_data = th.cat((self.locals['obs_tensor'].to(self.device), th.from_numpy(self.locals['actions']).to(self.device)), -1)
+            target_data = th.from_numpy(self.locals['new_obs']).to(self.device)
+            # print(f"@@@@@@ input shape: {input_data.shape}, target shape {target_data.shape}")
 
-        input_data = th.cat((self.locals['obs_tensor'].to(self.device), th.from_numpy(self.locals['actions']).to(self.device)), -1)
-        target_data = th.from_numpy(self.locals['new_obs']).to(self.device)
-        # print(f"@@@@@@ input shape: {input_data.shape}, target shape {target_data.shape}")
+            dataset = th.utils.data.TensorDataset(input_data, target_data)
+            train_loader = th.utils.data.DataLoader(dataset=dataset, batch_size=num_envs, shuffle=False)
 
-        dataset = th.utils.data.TensorDataset(input_data, target_data)
-        train_loader = th.utils.data.DataLoader(dataset=dataset, batch_size=num_envs, shuffle=False)
+            for epoch in range(1, self.epochs + 1):
+                loss = self.train(train_loader)
+                # print(f"obs_img_model Training Step: {self.locals['n_steps']}, Epoch: {epoch}, Loss: {loss.item():.6f}")
+    
+            self.logger.record("obs_img_loss", loss.item())
 
-        for epoch in range(1, self.epochs + 1):
-            loss = self.train(train_loader)
-            # print(f"obs_img_model Training Step: {self.locals['n_steps']}, Epoch: {epoch}, Loss: {loss.item():.6f}")
- 
-        self.logger.record("obs_img_loss", loss.item())
-
-        if self.n_calls % self.save_freq == 0:
-            th.save(self.obs_img_model, self.models_dir)
+            if self.n_calls % self.save_freq == 0:
+                th.save(self.obs_img_model, self.models_dir)
 
         return True
