@@ -49,7 +49,7 @@ class Policy_rollout:
         print(f"@@@@@@@@ {saved_data_path} : {os.path.isfile(saved_data_path)}")
         if os.path.isfile(saved_data_path):
             expert_observations, expert_actions = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"]
-            print(f"Using saved data from : {saved_data_path}")
+            print(f"Using saved data from : {saved_data_path} {expert_observations.shape} {expert_actions.shape}")
         else:
             models_dir = os.path.join(self.run_dir, f"models")
             print(f"Preparing data from the rl_model and obs_img_model from: {models_dir}")
@@ -58,15 +58,15 @@ class Policy_rollout:
             obs_img_model = th.load(os.path.join(models_dir, "obs_model"), map_location=th.device('cpu'))
             alg = construct_policy_model.ALGS[self.run_config["alg"]]
             rl_model = alg.load(os.path.join(models_dir, "best_model"))
-            for i in tqdm(range(1000)):
+            for _ in tqdm(range(1010)):
                 obs = th.load(os.path.join(models_dir, "obs_tensor"), map_location=th.device('cpu'))
-                for i in range(self.run_config["max_episode_steps"]):
+                for _ in range(self.run_config["max_episode_steps"]):
                     obs = th.tensor(obs)
+                    list_observations.append(obs)
                     action, _ = rl_model.predict(obs, deterministic=False)
                     action = th.tensor(action)
                     input_data = th.cat((obs, action), -1)
                     obs = obs_img_model(input_data)
-                    list_observations.append(obs)
                     list_actions.append(action)
 
             expert_observations, expert_actions = (th.stack(list_observations)).detach().numpy(), (th.stack(list_actions)).detach().numpy()
