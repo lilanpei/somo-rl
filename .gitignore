@@ -156,3 +156,4 @@ somo_rl/post_processing/test.ipynb
 *.txt
 *.patch
 /tb_data
+.DS_Store
