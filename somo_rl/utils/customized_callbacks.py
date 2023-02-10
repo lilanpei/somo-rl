@@ -270,13 +270,14 @@ class Observation_imagination_Callback(BaseCallback):
 
     def __init__(self, models_dir: str, save_freq: int, device: Union[th.device, str] = "cuda" if th.cuda.is_available() else "cpu", verbose=0):
         super(Observation_imagination_Callback, self).__init__(verbose)
-        self.models_dir = os.path.join(models_dir, "obs_model")
+        self.models_dir = models_dir
         self.save_freq = save_freq
         self.obs_tensor_path = os.path.join(models_dir, "obs_tensor")
         self.criterion = nn.MSELoss()
         self.learning_rate = 0.001
         self.epochs = 50
         self.device = device
+        self.min_loss = np.inf
         self.obs_img_model = Obs_Img_NN().to(self.device)
         self.optimizer = optim.Adadelta(self.obs_img_model.parameters(), lr=self.learning_rate)
 
@@ -310,10 +311,14 @@ class Observation_imagination_Callback(BaseCallback):
             for epoch in range(1, self.epochs + 1):
                 loss = self.train(train_loader)
                 # print(f"obs_img_model Training Step: {self.locals['n_steps']}, Epoch: {epoch}, Loss: {loss.item():.6f}")
-    
+
             self.logger.record("obs_img_loss", loss.item())
 
+            if loss < self.min_loss:
+                self.min_loss = loss
+                th.save(self.obs_img_model, os.path.join(self.models_dir, "best_obs_model"))
+
             if self.n_calls % self.save_freq == 0:
-                th.save(self.obs_img_model, self.models_dir)
+                th.save(self.obs_img_model, os.path.join(self.models_dir, f"obs_model_{self.locals['n_steps']}"))
 
         return True
