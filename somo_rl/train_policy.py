@@ -20,7 +20,7 @@ sys.path.insert(0, path)
 from user_settings import EXPERIMENT_ABS_PATH
 from somo_rl.utils.import_environment import import_env
 from somo_rl.utils import parse_config, construct_policy_model
-from somo_rl.utils.customized_callbacks import Multi_Obj_EvalCallback, SaveOnBestTrainingRewardCallback, TensorboardCallback, Observation_imagination_Callback
+from somo_rl.utils.customized_callbacks import Multi_Obj_EvalCallback, SaveOnBestTrainingRewardCallback, TensorboardCallback, Observation_imagination_Callback, Observation_imagination_rnn_Callback
 
 
 def create_note(run_dir, run_ID, start_datetime, note):
@@ -281,11 +281,17 @@ def run(
         save_freq=run_config["checkpoint_cb"]["save_freq"],
         save_path=checkpoints_dir,
     )
-    
-    Observation_imagination_callback = Observation_imagination_Callback(
+
+    Observation_imagination_rnn_callback = Observation_imagination_rnn_Callback(
         models_dir=models_dir,
+        max_episode_steps=run_config["max_episode_steps"],
         save_freq=run_config["checkpoint_cb"]["save_freq"],
     )
+
+    # Observation_imagination_callback = Observation_imagination_Callback(
+    #     models_dir=models_dir,
+    #     save_freq=run_config["checkpoint_cb"]["save_freq"],
+    # )
 
     # savebest_callback = SaveOnBestTrainingRewardCallback(
     #     check_freq=run_config["eval_cb"]["eval_freq"],
@@ -297,7 +303,7 @@ def run(
     #     eval_freq=run_config["eval_cb"]["eval_freq"]
     # )
 
-    callback = CallbackList([eval_callback, checkpoint_callback, Observation_imagination_callback])
+    callback = CallbackList([eval_callback, checkpoint_callback, Observation_imagination_rnn_callback])
 
     policy_kwargs = {}
     if run_config["alg"] == "PPO":
