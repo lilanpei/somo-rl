@@ -303,6 +303,7 @@ class Observation_imagination_Callback(BaseCallback):
 
     def train(self, train_loader):
 
+        self.obs_img_model.train()
         for batch_idx, (data, target) in enumerate(train_loader):
             self.optimizer.zero_grad()
             observation = self.obs_img_model(data.to(th.float32))
@@ -320,26 +321,26 @@ class Observation_imagination_Callback(BaseCallback):
         if self.locals['n_steps'] == 0:
             # print(f"@@@@@@ SAVE new_obs to {self.obs_tensor_path}")
             th.save(self.locals['new_obs'].tolist()[0], self.obs_tensor_path)
-        else:
-            input_data = th.cat((self.locals['obs_tensor'].to(self.device), th.from_numpy(self.locals['actions']).to(self.device)), -1)
-            target_data = th.from_numpy(self.locals['new_obs']).to(self.device)
-            # print(f"@@@@@@ input shape: {input_data.shape}, target shape {target_data.shape}")
 
-            dataset = th.utils.data.TensorDataset(input_data, target_data)
-            train_loader = th.utils.data.DataLoader(dataset=dataset, batch_size=num_envs, shuffle=False)
+        input_data = th.cat((self.locals['obs_tensor'].to(self.device), th.from_numpy(self.locals['actions']).to(self.device)), -1)
+        target_data = th.from_numpy(self.locals['new_obs']).to(self.device)
+        # print(f"@@@@@@ input shape: {input_data.shape}, target shape {target_data.shape}")
 
-            for epoch in range(1, self.epochs + 1):
-                loss = self.train(train_loader)
-                # print(f"obs_img_model Training Step: {self.locals['n_steps']}, Epoch: {epoch}, Loss: {loss.item():.6f}")
+        dataset = th.utils.data.TensorDataset(input_data, target_data)
+        train_loader = th.utils.data.DataLoader(dataset=dataset, batch_size=num_envs, shuffle=False)
 
-            self.logger.record("obs_img_loss", loss.item())
+        for epoch in range(1, self.epochs + 1):
+            loss = self.train(train_loader)
+            # print(f"obs_img_model Training Step: {self.locals['n_steps']}, Epoch: {epoch}, Loss: {loss.item():.6f}")
 
-            if loss < self.min_loss:
-                self.min_loss = loss
-                th.save(self.obs_img_model, os.path.join(self.models_dir, "best_obs_model"))
+        self.logger.record("obs_img_loss_mlp", loss.item())
 
-            if self.n_calls % self.save_freq == 0:
-                th.save(self.obs_img_model, os.path.join(self.models_dir, f"obs_model_{self.locals['n_steps']}"))
+        if loss < self.min_loss:
+            self.min_loss = loss
+            th.save(self.obs_img_model, os.path.join(self.models_dir, "best_obs_model_mlp"))
+
+        if self.n_calls > 0 and  self.n_calls % self.save_freq == 0:
+            th.save(self.obs_img_model, os.path.join(self.models_dir, f"obs_model_mlp_{self.locals['n_steps']}"))
 
         return True
 
@@ -366,6 +367,7 @@ class Observation_imagination_rnn_Callback(BaseCallback):
 
     def train(self, train_loader):
 
+        self.obs_img_model.train()
         for batch_idx, (data, target) in enumerate(train_loader):
             self.optimizer.zero_grad()
             observation, _ = self.obs_img_model(data.to(th.float32))
@@ -401,16 +403,16 @@ class Observation_imagination_rnn_Callback(BaseCallback):
                 # print(f"obs_img_model Training Step: {self.locals['n_steps']}, Epoch: {epoch}, Loss: {loss.item():.6f}")
 
             print(f"@@@@@@ obs_img_model Training Step: {self.locals['n_steps']}, Loss: {loss.item():.6f}")
-            self.logger.record("obs_img_loss", loss.item())
+            self.logger.record("obs_img_loss_gru", loss.item())
 
             self.episode_input = []
             self.episode_target = []
 
             if loss < self.min_loss:
                 self.min_loss = loss
-                th.save(self.obs_img_model, os.path.join(self.models_dir, "best_obs_model"))
+                th.save(self.obs_img_model, os.path.join(self.models_dir, "best_obs_model_gru"))
 
             if self.n_calls % self.save_freq == 0:
-                th.save(self.obs_img_model, os.path.join(self.models_dir, f"obs_model_{self.locals['n_steps']}"))
+                th.save(self.obs_img_model, os.path.join(self.models_dir, f"obs_model_gru_{self.locals['n_steps']}"))
 
         return True
