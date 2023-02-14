@@ -22,9 +22,10 @@ class Obs_Img_NN(nn.Module):
     def __init__(self):
         super(Obs_Img_NN, self).__init__()
         self.model = nn.Sequential(
-            nn.Linear(268+8, 268),
+            nn.Linear(268+8, 512),
             nn.Tanh(),
-            nn.Linear(268, 268),
+            nn.Dropout(0.2),
+            nn.Linear(512, 268),
         )
 
     def forward(self, x):
@@ -33,20 +34,26 @@ class Obs_Img_NN(nn.Module):
 
 
 class Obs_Img_RNN(nn.Module):
-    def __init__(self, input_size=268+8, hidden_size=268, num_layers=1):
+    def __init__(self, input_size=268+8, hidden_size=512, output_size=268, num_layers=2, dropout=0.2):
         super(Obs_Img_RNN, self).__init__()
         self.hidden_size = hidden_size
+        self.output_size = output_size
         self.num_layers = num_layers
-        self.gru = nn.GRU(input_size, hidden_size, num_layers)
+        self.gru = nn.GRU(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, dropout=dropout)
+        self.dropout = nn.Dropout(dropout)
+        self.linear = nn.Linear(hidden_size, output_size)
 
     def init_hidden(self, batch_size):
         hidden = next(self.parameters())
         return hidden.new_zeros(self.num_layers, batch_size, self.hidden_size)
 
-    def forward(self, x):
-        h = self.init_hidden(x.shape[-2])
-        output, hidden = self.gru(x, h) # (seq, batch, hidden)
-        return output, hidden
+    def forward(self, x, h=None):
+        if h is None:
+            h = self.init_hidden(x.shape[-2])
+        output_gru, hidden = self.gru(x, h) # (seq, batch, hidden)
+        output_dropout = self.dropout(output_gru)
+        output_linear = self.linear(output_dropout)
+        return output_linear, hidden
 
 
 class Multi_Obj_EvalCallback(EventCallback):
