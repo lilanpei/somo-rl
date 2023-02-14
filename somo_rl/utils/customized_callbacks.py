@@ -333,6 +333,7 @@ class Observation_imagination_Callback(BaseCallback):
             loss = self.train(train_loader)
             # print(f"obs_img_model Training Step: {self.locals['n_steps']}, Epoch: {epoch}, Loss: {loss.item():.6f}")
 
+        print(f"@@@@@@ obs_img_model Training Step: {self.locals['n_steps']}, Loss: {loss.item():.6f}")
         self.logger.record("obs_img_loss_mlp", loss.item())
 
         if loss < self.min_loss:
