@@ -288,10 +288,10 @@ def run(
         save_freq=run_config["checkpoint_cb"]["save_freq"],
     )
 
-    # Observation_imagination_callback = Observation_imagination_Callback(
-    #     models_dir=models_dir,
-    #     save_freq=run_config["checkpoint_cb"]["save_freq"],
-    # )
+    Observation_imagination_callback = Observation_imagination_Callback(
+        models_dir=models_dir,
+        save_freq=run_config["checkpoint_cb"]["save_freq"],
+    )
 
     # savebest_callback = SaveOnBestTrainingRewardCallback(
     #     check_freq=run_config["eval_cb"]["eval_freq"],

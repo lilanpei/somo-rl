@@ -295,7 +295,7 @@ class Observation_imagination_Callback(BaseCallback):
         self.obs_tensor_path = os.path.join(models_dir, "obs_tensor")
         self.criterion = nn.MSELoss()
         self.learning_rate = 0.001
-        self.epochs = 10
+        self.epochs = 20
         self.device = device
         self.min_loss = np.inf
         self.obs_img_model = Obs_Img_NN().to(self.device)
@@ -357,7 +357,7 @@ class Observation_imagination_rnn_Callback(BaseCallback):
         self.obs_tensor_path = os.path.join(models_dir, "obs_tensor")
         self.criterion = nn.MSELoss()
         self.learning_rate = 0.001
-        self.epochs = 10
+        self.epochs = 30
         self.device = device
         self.min_loss = np.inf
         self.episode_input = []
