@@ -57,7 +57,7 @@ class Policy_rollout:
             rl_model = alg.load(os.path.join(models_dir, "best_model"))
             list_observations = []
             list_actions = []
-            if os.path.isfile(os.path.join(models_dir, "1best_obs_model_gru")):
+            if os.path.isfile(os.path.join(models_dir, "best_obs_model_gru")):
                 print(f"@@@@@@ Preparing data from the rl_agent and obs_img_gru_model from: {models_dir}")
                 obs_img_gru_model = th.load(os.path.join(models_dir, "best_obs_model_gru"), map_location=th.device('cpu'))
                 obs_img_gru_model.eval()
@@ -73,7 +73,7 @@ class Policy_rollout:
                         obs, hidden = obs_img_gru_model(input_data.view(1, 1, input_data.shape[0]), hidden) # (seq, batch, hidden)
                         obs = th.squeeze(obs).detach().numpy()
                         list_actions.append(action)
-            elif os.path.isfile(os.path.join(models_dir, "1best_obs_model_mlp")):
+            elif os.path.isfile(os.path.join(models_dir, "best_obs_model_mlp")):
                 print(f"@@@@@@ Preparing data from the rl_agent and obs_img_mlp_model from: {models_dir}")
                 obs_img_mlp_model = th.load(os.path.join(models_dir, "best_obs_model_mlp"), map_location=th.device('cpu'))
                 obs_img_mlp_model.eval()
