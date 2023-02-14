@@ -38,7 +38,7 @@ class Policy_rollout:
         self.train_expert_dataset = None
         self.test_expert_dataset = None
         self.run_dir, self.run_config = load_run_config_file(run_ID=run_ID, exp_abs_path=exp_abs_path)
-        self.env = load_env(self.run_config, render=render, debug=debug)
+        self.env = load_env(self.run_config, debug=debug)
         self.no_cuda = no_cuda
         self.render = render
         self.use_cuda = not self.no_cuda and th.cuda.is_available()
@@ -57,10 +57,11 @@ class Policy_rollout:
             rl_model = alg.load(os.path.join(models_dir, "best_model"))
             list_observations = []
             list_actions = []
-            if os.path.isfile(os.path.join(models_dir, "best_obs_model_gru")):
+            if os.path.isfile(os.path.join(models_dir, "1best_obs_model_gru")):
                 print(f"@@@@@@ Preparing data from the rl_agent and obs_img_gru_model from: {models_dir}")
                 obs_img_gru_model = th.load(os.path.join(models_dir, "best_obs_model_gru"), map_location=th.device('cpu'))
-                for _ in tqdm(range(10)):
+                obs_img_gru_model.eval()
+                for _ in tqdm(range(1000)):
                     obs = th.load(os.path.join(models_dir, "obs_tensor"), map_location=th.device('cpu'))
                     hidden = None
                     for _ in range(self.run_config["max_episode_steps"]):
@@ -72,10 +73,11 @@ class Policy_rollout:
                         obs, hidden = obs_img_gru_model(input_data.view(1, 1, input_data.shape[0]), hidden) # (seq, batch, hidden)
                         obs = th.squeeze(obs).detach().numpy()
                         list_actions.append(action)
-            elif os.path.isfile(os.path.join(models_dir, "best_obs_model_mlp")):
+            elif os.path.isfile(os.path.join(models_dir, "1best_obs_model_mlp")):
                 print(f"@@@@@@ Preparing data from the rl_agent and obs_img_mlp_model from: {models_dir}")
                 obs_img_mlp_model = th.load(os.path.join(models_dir, "best_obs_model_mlp"), map_location=th.device('cpu'))
-                for _ in tqdm(range(10)):
+                obs_img_mlp_model.eval()
+                for _ in tqdm(range(1000)):
                     obs = th.load(os.path.join(models_dir, "obs_tensor"), map_location=th.device('cpu'))   
                     for _ in range(self.run_config["max_episode_steps"]):
                         obs = th.tensor(obs)
@@ -87,7 +89,7 @@ class Policy_rollout:
                         list_actions.append(action)
             else:
                 print(f"@@@@@@ Preparing data from the rl_agent and env from: {models_dir}")
-                for epi in tqdm(range(10)):
+                for epi in tqdm(range(1000)):
                     obs = self.env.reset(run_render=False)#self.render)
                     for _ in range(self.run_config["max_episode_steps"]):
                         list_observations.append(th.tensor(obs))
