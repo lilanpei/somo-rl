@@ -40,6 +40,7 @@ class Policy_rollout:
         self.run_dir, self.run_config = load_run_config_file(run_ID=run_ID, exp_abs_path=exp_abs_path)
         self.env = load_env(self.run_config, render=render, debug=debug)
         self.no_cuda = no_cuda
+        self.render = render
         self.use_cuda = not self.no_cuda and th.cuda.is_available()
         self.device = th.device("cuda" if self.use_cuda else "cpu")
         self.load_rollouts()
@@ -52,25 +53,51 @@ class Policy_rollout:
             print(f"Using saved data from : {saved_data_path} {expert_observations.shape} {expert_actions.shape}")
         else:
             models_dir = os.path.join(self.run_dir, f"models")
-            print(f"Preparing data from the rl_model and obs_img_model from: {models_dir}")
-            list_observations = []
-            list_actions = []
-            obs_img_model = th.load(os.path.join(models_dir, "obs_model"), map_location=th.device('cpu'))
             alg = construct_policy_model.ALGS[self.run_config["alg"]]
             rl_model = alg.load(os.path.join(models_dir, "best_model"))
-            for _ in tqdm(range(1010)):
-                obs = th.load(os.path.join(models_dir, "obs_tensor"), map_location=th.device('cpu'))
-                for _ in range(self.run_config["max_episode_steps"]):
-                    obs = th.tensor(obs)
-                    list_observations.append(obs)
-                    action, _ = rl_model.predict(obs, deterministic=False)
-                    action = th.tensor(action)
-                    input_data = th.cat((obs, action), -1)
-                    obs = obs_img_model(input_data)
-                    list_actions.append(action)
-
+            list_observations = []
+            list_actions = []
+            if os.path.isfile(os.path.join(models_dir, "best_obs_model_gru")):
+                print(f"@@@@@@ Preparing data from the rl_agent and obs_img_gru_model from: {models_dir}")
+                obs_img_gru_model = th.load(os.path.join(models_dir, "best_obs_model_gru"), map_location=th.device('cpu'))
+                for _ in tqdm(range(10)):
+                    obs = th.load(os.path.join(models_dir, "obs_tensor"), map_location=th.device('cpu'))
+                    hidden = None
+                    for _ in range(self.run_config["max_episode_steps"]):
+                        obs = th.as_tensor(obs)
+                        list_observations.append(obs)
+                        action, _ = rl_model.predict(obs, deterministic=False)
+                        action = th.as_tensor(action)
+                        input_data = th.cat((obs, action), -1)
+                        obs, hidden = obs_img_gru_model(input_data.view(1, 1, input_data.shape[0]), hidden) # (seq, batch, hidden)
+                        obs = th.squeeze(obs).detach().numpy()
+                        list_actions.append(action)
+            elif os.path.isfile(os.path.join(models_dir, "best_obs_model_mlp")):
+                print(f"@@@@@@ Preparing data from the rl_agent and obs_img_mlp_model from: {models_dir}")
+                obs_img_mlp_model = th.load(os.path.join(models_dir, "best_obs_model_mlp"), map_location=th.device('cpu'))
+                for _ in tqdm(range(10)):
+                    obs = th.load(os.path.join(models_dir, "obs_tensor"), map_location=th.device('cpu'))   
+                    for _ in range(self.run_config["max_episode_steps"]):
+                        obs = th.tensor(obs)
+                        list_observations.append(obs)
+                        action, _ = rl_model.predict(obs, deterministic=False)
+                        action = th.tensor(action)
+                        input_data = th.cat((obs, action), -1)
+                        obs = obs_img_mlp_model(input_data)
+                        list_actions.append(action)
+            else:
+                print(f"@@@@@@ Preparing data from the rl_agent and env from: {models_dir}")
+                for epi in tqdm(range(10)):
+                    obs = self.env.reset(run_render=False)#self.render)
+                    for _ in range(self.run_config["max_episode_steps"]):
+                        list_observations.append(th.tensor(obs))
+                        action, _ = rl_model.predict(obs, deterministic=False)
+                        obs, _, _, info = self.env.step(action)
+                        list_actions.append(th.tensor(action))
+                    print(f"@@@@@@ Episode_{epi}, z_rotation: {info['z_rotation_step']}")
+                self.env.close()
+            
             expert_observations, expert_actions = (th.stack(list_observations)).detach().numpy(), (th.stack(list_actions)).detach().numpy()
-
             np.savez_compressed(
                 os.path.join(self.run_dir, f"expert_data_{self.run_config['object']}"),
                 expert_observations=expert_observations,
@@ -178,7 +205,7 @@ class Pretrain_agent:
                  render,
                  expert_objects,
                  batch_size=1,
-                 epochs=10,
+                 epochs=3,
                  scheduler_gamma=0.7,
                  learning_rate=1,
                  no_cuda=False,
