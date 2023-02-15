@@ -340,7 +340,7 @@ class Observation_imagination_Callback(BaseCallback):
             self.min_loss = loss
             th.save(self.obs_img_model, os.path.join(self.models_dir, "best_obs_model_mlp"))
 
-        if self.n_calls > 0 and self.n_calls % self.save_freq == 0:
+        if self.n_calls > 2000000 and self.n_calls % self.save_freq == 0:
             th.save(self.obs_img_model, os.path.join(self.models_dir, f"obs_model_mlp_{self.n_calls}"))
 
         return True
@@ -413,7 +413,7 @@ class Observation_imagination_rnn_Callback(BaseCallback):
                 self.min_loss = loss
                 th.save(self.obs_img_model, os.path.join(self.models_dir, "best_obs_model_gru"))
 
-            if self.n_calls % self.save_freq == 0:
-                th.save(self.obs_img_model, os.path.join(self.models_dir, f"obs_model_gru_{self.n_calls}"))
+        if self.n_calls > 2000000 and self.n_calls % self.save_freq == 0:
+            th.save(self.obs_img_model, os.path.join(self.models_dir, f"obs_model_gru_{self.n_calls}"))
 
         return True
