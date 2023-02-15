@@ -331,7 +331,6 @@ class Observation_imagination_Callback(BaseCallback):
 
         for epoch in range(1, self.epochs + 1):
             loss = self.train(train_loader)
-            # print(f"obs_img_model Training Step: {self.locals['n_steps']}, Epoch: {epoch}, Loss: {loss.item():.6f}")
 
         print(f"@@@@@@ obs_img_model Training Step: {self.n_calls}, Loss: {loss.item():.6f}")
         self.logger.record("obs_img_loss_mlp", loss.item())
@@ -384,7 +383,7 @@ class Observation_imagination_rnn_Callback(BaseCallback):
         # print(f"@@@@@@ n_calls: {self.n_calls}, obs_tensor: {self.locals['obs_tensor'].shape}, new_obs: {self.locals['new_obs'].shape}, actions: {self.locals['actions'].shape}")
         num_envs = self.locals['actions'].shape[0]
         if self.n_calls == 1:
-            print(f"@@@@@@ step: {self.locals['n_steps']}, n_calls: {self.n_calls}, SAVE new_obs to {self.obs_tensor_path}")
+            print(f"@@@@@@ n_calls: {self.n_calls}, SAVE new_obs to {self.obs_tensor_path}")
             th.save(self.locals['new_obs'].tolist()[0], self.obs_tensor_path)
 
         input_data = th.cat((self.locals['obs_tensor'].to(self.device), th.from_numpy(self.locals['actions']).to(self.device)), -1)
@@ -410,11 +409,11 @@ class Observation_imagination_rnn_Callback(BaseCallback):
 
             if self.n_calls > 2000000 and loss < self.min_loss:
                 self.min_loss = loss
-                print(f"@@@@@@ step: {self.locals['n_steps']}, n_calls: {self.n_calls}, SAVE best_obs_model_gru")
+                print(f"@@@@@@ n_calls: {self.n_calls}, min_loss: {loss}, SAVE best_obs_model_gru")
                 th.save(self.obs_img_model, os.path.join(self.models_dir, "best_obs_model_gru"))
 
             if self.n_calls > 2000000 and self.n_calls % self.save_freq == 0:
-                print(f"@@@@@@ step: {self.locals['n_steps']}, n_calls: {self.n_calls}, SAVE obs_model_gru_{self.n_calls}")
+                print(f"@@@@@@ n_calls: {self.n_calls}, loss: {loss}, SAVE obs_model_gru_{self.n_calls}")
                 th.save(self.obs_img_model, os.path.join(self.models_dir, f"obs_model_gru_{self.n_calls}"))
 
         return True
