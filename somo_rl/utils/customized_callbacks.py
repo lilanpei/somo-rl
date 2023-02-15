@@ -316,10 +316,10 @@ class Observation_imagination_Callback(BaseCallback):
 
     def _on_step(self) -> bool:
         # print(f"@@@@@@ locals: {self.locals}")
-        # print(f"@@@@@@ n_steps: {self.locals['n_steps']}, obs_tensor: {self.locals['obs_tensor'].shape}, new_obs: {self.locals['new_obs'].shape}, actions: {self.locals['actions'].shape}")
+        # print(f"@@@@@@ n_calls: {self.n_calls}, obs_tensor: {self.locals['obs_tensor'].shape}, new_obs: {self.locals['new_obs'].shape}, actions: {self.locals['actions'].shape}")
         num_envs = self.locals['actions'].shape[0]
-        if self.locals['n_steps'] == 0:
-            # print(f"@@@@@@ SAVE new_obs to {self.obs_tensor_path}")
+        if self.n_calls == 1:
+            print(f"@@@@@@ SAVE new_obs to {self.obs_tensor_path}")
             th.save(self.locals['new_obs'].tolist()[0], self.obs_tensor_path)
 
         input_data = th.cat((self.locals['obs_tensor'].to(self.device), th.from_numpy(self.locals['actions']).to(self.device)), -1)
@@ -333,7 +333,7 @@ class Observation_imagination_Callback(BaseCallback):
             loss = self.train(train_loader)
             # print(f"obs_img_model Training Step: {self.locals['n_steps']}, Epoch: {epoch}, Loss: {loss.item():.6f}")
 
-        print(f"@@@@@@ obs_img_model Training Step: {self.locals['n_steps']}, Loss: {loss.item():.6f}")
+        print(f"@@@@@@ obs_img_model Training Step: {self.n_calls}, Loss: {loss.item():.6f}")
         self.logger.record("obs_img_loss_mlp", loss.item())
 
         if self.n_calls > 2000000 and loss < self.min_loss:
@@ -357,7 +357,7 @@ class Observation_imagination_rnn_Callback(BaseCallback):
         self.max_episode_steps = max_episode_steps
         self.obs_tensor_path = os.path.join(models_dir, "obs_tensor")
         self.criterion = nn.MSELoss()
-        self.learning_rate = 0.01
+        self.learning_rate = 0.001
         self.epochs = 30
         self.device = device
         self.min_loss = np.inf
@@ -381,10 +381,10 @@ class Observation_imagination_rnn_Callback(BaseCallback):
 
     def _on_step(self) -> bool:
         # print(f"@@@@@@ locals: {self.locals}")
-        # print(f"@@@@@@ n_steps: {self.locals['n_steps']}, obs_tensor: {self.locals['obs_tensor'].shape}, new_obs: {self.locals['new_obs'].shape}, actions: {self.locals['actions'].shape}")
+        # print(f"@@@@@@ n_calls: {self.n_calls}, obs_tensor: {self.locals['obs_tensor'].shape}, new_obs: {self.locals['new_obs'].shape}, actions: {self.locals['actions'].shape}")
         num_envs = self.locals['actions'].shape[0]
-        if self.locals['n_steps'] == 0:
-            # print(f"@@@@@@ SAVE new_obs to {self.obs_tensor_path}")
+        if self.n_calls == 1:
+            print(f"@@@@@@ step: {self.locals['n_steps']}, n_calls: {self.n_calls}, SAVE new_obs to {self.obs_tensor_path}")
             th.save(self.locals['new_obs'].tolist()[0], self.obs_tensor_path)
 
         input_data = th.cat((self.locals['obs_tensor'].to(self.device), th.from_numpy(self.locals['actions']).to(self.device)), -1)
@@ -394,16 +394,15 @@ class Observation_imagination_rnn_Callback(BaseCallback):
         self.episode_input.append(input_data)
         self.episode_target.append(target_data)
 
-        # print(f"@@@@@@ step: {self.locals['n_steps']}, episode_input: {len(self.episode_input)}, episode_target: {len(self.episode_target)}")
+        # print(f"@@@@@@ n_calls: {self.n_calls}, episode_input: {len(self.episode_input)}, episode_target: {len(self.episode_target)}")
         dataset = th.utils.data.TensorDataset(th.stack(self.episode_input), th.stack(self.episode_target))
         train_loader = th.utils.data.DataLoader(dataset=dataset, batch_size=num_envs, shuffle=False)
 
         if self.n_calls > 0 and self.n_calls % self.max_episode_steps == 0:
             for epoch in range(1, self.epochs + 1):
                 loss = self.train(train_loader)
-                # print(f"obs_img_model Training Step: {self.locals['n_steps']}, Epoch: {epoch}, Loss: {loss.item():.6f}")
 
-            print(f"@@@@@@ obs_img_model Training Step: {self.locals['n_steps']}, Loss: {loss.item():.6f}")
+            print(f"@@@@@@ obs_img_model Training n_calls: {self.n_calls}, Loss: {loss.item():.6f}")
             self.logger.record("obs_img_loss_gru", loss.item())
 
             self.episode_input = []
@@ -411,9 +410,11 @@ class Observation_imagination_rnn_Callback(BaseCallback):
 
             if self.n_calls > 2000000 and loss < self.min_loss:
                 self.min_loss = loss
+                print(f"@@@@@@ step: {self.locals['n_steps']}, n_calls: {self.n_calls}, SAVE best_obs_model_gru")
                 th.save(self.obs_img_model, os.path.join(self.models_dir, "best_obs_model_gru"))
 
-        if self.n_calls > 2000000 and self.n_calls % self.save_freq == 0:
-            th.save(self.obs_img_model, os.path.join(self.models_dir, f"obs_model_gru_{self.n_calls}"))
+            if self.n_calls > 2000000 and self.n_calls % self.save_freq == 0:
+                print(f"@@@@@@ step: {self.locals['n_steps']}, n_calls: {self.n_calls}, SAVE obs_model_gru_{self.n_calls}")
+                th.save(self.obs_img_model, os.path.join(self.models_dir, f"obs_model_gru_{self.n_calls}"))
 
         return True
