@@ -24,7 +24,7 @@ class Obs_Img_NN(nn.Module):
         self.model = nn.Sequential(
             nn.Linear(268+8, 512),
             nn.Tanh(),
-            nn.Dropout(0.2),
+            #nn.Dropout(0.2),
             nn.Linear(512, 268),
         )
 
@@ -34,13 +34,13 @@ class Obs_Img_NN(nn.Module):
 
 
 class Obs_Img_RNN(nn.Module):
-    def __init__(self, input_size=268+8, hidden_size=512, output_size=268, num_layers=2, dropout=0.2):
+    def __init__(self, input_size=268+8, hidden_size=512, output_size=268, num_layers=1):#2, dropout=0.2):
         super(Obs_Img_RNN, self).__init__()
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.num_layers = num_layers
-        self.gru = nn.GRU(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, dropout=dropout)
-        self.dropout = nn.Dropout(dropout)
+        self.gru = nn.GRU(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers)#, dropout=dropout)
+        #self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(hidden_size, output_size)
 
     def init_hidden(self, batch_size):

@@ -65,7 +65,7 @@ class Policy_rollout:
                     obs = th.load(os.path.join(models_dir, "obs_tensor"), map_location=th.device('cpu'))
                     hidden = None
                     for _ in range(self.run_config["max_episode_steps"]):
-                        obs = th.as_tensor(obs)
+                        obs = th.FloatTensor(obs)
                         list_observations.append(obs)
                         action, _ = rl_model.predict(obs, deterministic=False)
                         action = th.as_tensor(action)
@@ -91,6 +91,8 @@ class Policy_rollout:
                 print(f"@@@@@@ Preparing data from the rl_agent and env from: {models_dir}")
                 for epi in tqdm(range(1000)):
                     obs = self.env.reset(run_render=False)#self.render)
+                    if epi==0: # save the observation after env.reset
+                        th.save(obs, os.path.join(models_dir, "obs_tensor_env_reset"))
                     for _ in range(self.run_config["max_episode_steps"]):
                         list_observations.append(th.tensor(obs))
                         action, _ = rl_model.predict(obs, deterministic=False)
