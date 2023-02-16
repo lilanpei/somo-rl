@@ -51,8 +51,8 @@ class Obs_Img_RNN(nn.Module):
         if h is None:
             h = self.init_hidden(x.shape[-2])
         output_gru, hidden = self.gru(x, h) # (seq, batch, hidden)
-        output_dropout = self.dropout(output_gru)
-        output_linear = self.linear(output_dropout)
+        # output_dropout = self.dropout(output_gru)
+        output_linear = self.linear(output_gru)#output_dropout)
         return output_linear, hidden
 
 
