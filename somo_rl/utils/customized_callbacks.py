@@ -15,7 +15,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv, sync_envs_norm
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 sys.path.insert(0, path)
 
-from somo_rl.utils.evaluate_policy import evaluate_policy, evaluate_obs_model
+from somo_rl.utils.evaluate_policy import evaluate_policy, evaluate_obs_model_rnn, evaluate_obs_model_mlp
 
 
 class Obs_Img_NN(nn.Module):
@@ -341,7 +341,7 @@ class Observation_imagination_Callback(BaseCallback):
 
         self.obs_img_model.eval()
         with th.no_grad():
-            mean_reward, std_reward, mean_z_rotation, std_z_rotation = evaluate_obs_model(
+            mean_reward, std_reward, mean_z_rotation, std_z_rotation = evaluate_obs_model_mlp(
                 agent=self.model,
                 obs_model=self.obs_img_model,
                 run_ID=self.run_ID,
@@ -376,7 +376,7 @@ class Observation_imagination_Callback(BaseCallback):
 
         if self.n_calls % self.eval_freq == 0:
             mean_reward_obs, std_reward_obs, mean_z_rotation_obs, std_z_rotation_obs = self.evaluate()
-            print(f"@@@@@@ Eval obs_img_model n_calls: {self.n_calls},  " f"episode_reward={mean_reward_obs:.2f} +/- {std_reward_obs:.2f}", f"episode_z_rotation={mean_z_rotation_obs:.2f} +/- {std_z_rotation_obs:.2f}")
+            print(f"@@@@@@ Eval obs_img_model n_calls: {self.n_calls},  " f"episode_reward={mean_reward_obs:.2f} +/- {std_reward_obs:.2f},", f"episode_z_rotation={mean_z_rotation_obs:.2f} +/- {std_z_rotation_obs:.2f}")
             # Add to current Logger
             self.logger.record("eval/obs_model_mean_reward", float(mean_reward_obs))
             self.logger.record("eval/obs_model_mean_z_rotation", float(mean_z_rotation_obs))
@@ -447,7 +447,7 @@ class Observation_imagination_rnn_Callback(BaseCallback):
 
         self.obs_img_model.eval()
         with th.no_grad():
-            mean_reward, std_reward, mean_z_rotation, std_z_rotation = evaluate_obs_model(
+            mean_reward, std_reward, mean_z_rotation, std_z_rotation = evaluate_obs_model_rnn(
                 agent=self.model,
                 obs_model=self.obs_img_model,
                 run_ID=self.run_ID,
@@ -490,7 +490,7 @@ class Observation_imagination_rnn_Callback(BaseCallback):
 
             if self.n_calls % self.eval_freq == 0:
                 mean_reward_obs, std_reward_obs, mean_z_rotation_obs, std_z_rotation_obs = self.evaluate()
-                print(f"@@@@@@ Eval obs_img_model n_calls: {self.n_calls},  " f"episode_reward={mean_reward_obs:.2f} +/- {std_reward_obs:.2f}", f"episode_z_rotation={mean_z_rotation_obs:.2f} +/- {std_z_rotation_obs:.2f}")
+                print(f"@@@@@@ Eval obs_img_model n_calls: {self.n_calls},  " f"episode_reward={mean_reward_obs:.2f} +/- {std_reward_obs:.2f},", f"episode_z_rotation={mean_z_rotation_obs:.2f} +/- {std_z_rotation_obs:.2f}")
                 # Add to current Logger
                 self.logger.record("eval/obs_model_mean_reward", float(mean_reward_obs))
                 self.logger.record("eval/obs_model_mean_z_rotation", float(mean_z_rotation_obs))
