@@ -15,7 +15,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv, sync_envs_norm
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 sys.path.insert(0, path)
 
-from somo_rl.utils.evaluate_policy import evaluate_policy
+from somo_rl.utils.evaluate_policy import evaluate_policy, evaluate_obs_model
 
 
 class Obs_Img_NN(nn.Module):
@@ -24,7 +24,7 @@ class Obs_Img_NN(nn.Module):
         self.model = nn.Sequential(
             nn.Linear(268+8, 512),
             nn.Tanh(),
-            #nn.Dropout(0.2),
+            nn.Dropout(0.2),
             nn.Linear(512, 268),
         )
 
@@ -34,13 +34,16 @@ class Obs_Img_NN(nn.Module):
 
 
 class Obs_Img_RNN(nn.Module):
-    def __init__(self, input_size=268+8, hidden_size=512, output_size=268, num_layers=1):#2, dropout=0.2):
+    def __init__(self, input_size=268+8, hidden_size=512, output_size=268, num_layers=1, dropout=0.2):
         super(Obs_Img_RNN, self).__init__()
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.num_layers = num_layers
-        self.gru = nn.GRU(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers)#, dropout=dropout)
-        #self.dropout = nn.Dropout(dropout)
+        if num_layers > 1:
+            self.gru = nn.GRU(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, dropout=dropout)
+        else:
+            self.gru = nn.GRU(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers)
+        self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(hidden_size, output_size)
 
     def init_hidden(self, batch_size):
@@ -51,8 +54,8 @@ class Obs_Img_RNN(nn.Module):
         if h is None:
             h = self.init_hidden(x.shape[-2])
         output_gru, hidden = self.gru(x, h) # (seq, batch, hidden)
-        # output_dropout = self.dropout(output_gru)
-        output_linear = self.linear(output_gru)#output_dropout)
+        output_dropout = self.dropout(output_gru)
+        output_linear = self.linear(output_dropout)
         return output_linear, hidden
 
 
@@ -288,14 +291,34 @@ class Observation_imagination_Callback(BaseCallback):
     Train a model that takes the (obs, action) as input and output the new obs.
     """
 
-    def __init__(self, models_dir: str, save_freq: int, device: Union[th.device, str] = "cuda" if th.cuda.is_available() else "cpu", verbose=0):
+    def __init__(
+        self,
+        models_dir: str,
+        save_freq: int,
+        max_episode_steps: int,
+        run_ID: Optional[list] = None,
+        obs_model_eval_env: Union[gym.Env, VecEnv] = None,
+        n_eval_episodes: int = 5,
+        eval_freq: int = 10000,
+        deterministic: bool = True,
+        render: bool = False,
+        device: Union[th.device, str] = "cuda" if th.cuda.is_available() else "cpu",
+        verbose=0
+        ):
         super(Observation_imagination_Callback, self).__init__(verbose)
+
         self.models_dir = models_dir
         self.save_freq = save_freq
-        self.obs_tensor_path = os.path.join(models_dir, "obs_tensor")
+        self.max_episode_steps = max_episode_steps
+        self.run_ID = run_ID
+        self.obs_model_eval_env = obs_model_eval_env
+        self.n_eval_episodes = n_eval_episodes
+        self.eval_freq = eval_freq
+        self.deterministic = deterministic
+        self.render = render
         self.criterion = nn.MSELoss()
-        self.learning_rate = 0.001
-        self.epochs = 20
+        self.learning_rate = 0.0001
+        self.epochs = 10
         self.device = device
         self.min_loss = np.inf
         self.obs_img_model = Obs_Img_NN().to(self.device)
@@ -314,13 +337,29 @@ class Observation_imagination_Callback(BaseCallback):
 
         return loss
 
+    def evaluate(self):
+
+        self.obs_img_model.eval()
+        with th.no_grad():
+            mean_reward, std_reward, mean_z_rotation, std_z_rotation = evaluate_obs_model(
+                agent=self.model,
+                obs_model=self.obs_img_model,
+                run_ID=self.run_ID,
+                env=self.obs_model_eval_env,
+                n_eval_episodes=self.n_eval_episodes,
+                deterministic=self.deterministic,
+                render=self.render,
+            )
+
+        return mean_reward, std_reward, mean_z_rotation, std_z_rotation
+
     def _on_step(self) -> bool:
         # print(f"@@@@@@ locals: {self.locals}")
         # print(f"@@@@@@ n_calls: {self.n_calls}, obs_tensor: {self.locals['obs_tensor'].shape}, new_obs: {self.locals['new_obs'].shape}, actions: {self.locals['actions'].shape}")
         num_envs = self.locals['actions'].shape[0]
         if self.n_calls == 1:
-            print(f"@@@@@@ SAVE new_obs to {self.obs_tensor_path}")
-            th.save(self.locals['new_obs'].tolist()[0], self.obs_tensor_path)
+            print(f"@@@@@@ SAVE new_obs to {os.path.join(self.models_dir, 'obs_tensor')}")
+            th.save(self.locals['new_obs'].tolist()[0], os.path.join(self.models_dir, "obs_tensor"))
 
         input_data = th.cat((self.locals['obs_tensor'].to(self.device), th.from_numpy(self.locals['actions']).to(self.device)), -1)
         target_data = th.from_numpy(self.locals['new_obs']).to(self.device)
@@ -329,11 +368,18 @@ class Observation_imagination_Callback(BaseCallback):
         dataset = th.utils.data.TensorDataset(input_data, target_data)
         train_loader = th.utils.data.DataLoader(dataset=dataset, batch_size=num_envs, shuffle=False)
 
-        for epoch in range(1, self.epochs + 1):
+        for _ in range(1, self.epochs + 1):
             loss = self.train(train_loader)
 
         print(f"@@@@@@ obs_img_model Training Step: {self.n_calls}, Loss: {loss.item():.6f}")
         self.logger.record("obs_img_loss_mlp", loss.item())
+
+        if self.n_calls % self.eval_freq == 0:
+            mean_reward_obs, std_reward_obs, mean_z_rotation_obs, std_z_rotation_obs = self.evaluate()
+            print(f"@@@@@@ Eval obs_img_model n_calls: {self.n_calls},  " f"episode_reward={mean_reward_obs:.2f} +/- {std_reward_obs:.2f}", f"episode_z_rotation={mean_z_rotation_obs:.2f} +/- {std_z_rotation_obs:.2f}")
+            # Add to current Logger
+            self.logger.record("eval/obs_model_mean_reward", float(mean_reward_obs))
+            self.logger.record("eval/obs_model_mean_z_rotation", float(mean_z_rotation_obs))
 
         if self.n_calls > 2000000 and loss < self.min_loss:
             self.min_loss = loss
@@ -349,15 +395,34 @@ class Observation_imagination_rnn_Callback(BaseCallback):
     Train a model that takes the (obs, action) as input and output the new obs.
     """
 
-    def __init__(self, models_dir: str, save_freq: int, max_episode_steps: int, device: Union[th.device, str] = "cuda" if th.cuda.is_available() else "cpu", verbose=0):
+    def __init__(
+        self,
+        models_dir: str,
+        save_freq: int,
+        max_episode_steps: int,
+        run_ID: Optional[list] = None,
+        obs_model_eval_env: Union[gym.Env, VecEnv] = None,
+        n_eval_episodes: int = 5,
+        eval_freq: int = 10000,
+        deterministic: bool = True,
+        render: bool = False,
+        device: Union[th.device, str] = "cuda" if th.cuda.is_available() else "cpu",
+        verbose=0
+        ):
+
         super(Observation_imagination_rnn_Callback, self).__init__(verbose)
         self.models_dir = models_dir
         self.save_freq = save_freq
         self.max_episode_steps = max_episode_steps
-        self.obs_tensor_path = os.path.join(models_dir, "obs_tensor")
+        self.run_ID = run_ID
+        self.obs_model_eval_env = obs_model_eval_env
+        self.n_eval_episodes = n_eval_episodes
+        self.eval_freq = eval_freq
+        self.deterministic = deterministic
+        self.render = render
         self.criterion = nn.MSELoss()
-        self.learning_rate = 0.001
-        self.epochs = 50
+        self.learning_rate = 0.0001
+        self.epochs = 10
         self.device = device
         self.min_loss = np.inf
         self.episode_input = []
@@ -368,7 +433,7 @@ class Observation_imagination_rnn_Callback(BaseCallback):
     def train(self, train_loader):
 
         self.obs_img_model.train()
-        for batch_idx, (data, target) in enumerate(train_loader):
+        for data, target in train_loader:
             self.optimizer.zero_grad()
             observation, _ = self.obs_img_model(data.to(th.float32))
 
@@ -378,13 +443,29 @@ class Observation_imagination_rnn_Callback(BaseCallback):
 
         return loss
 
+    def evaluate(self):
+
+        self.obs_img_model.eval()
+        with th.no_grad():
+            mean_reward, std_reward, mean_z_rotation, std_z_rotation = evaluate_obs_model(
+                agent=self.model,
+                obs_model=self.obs_img_model,
+                run_ID=self.run_ID,
+                env=self.obs_model_eval_env,
+                n_eval_episodes=self.n_eval_episodes,
+                deterministic=self.deterministic,
+                render=self.render,
+            )
+
+        return mean_reward, std_reward, mean_z_rotation, std_z_rotation
+
     def _on_step(self) -> bool:
         # print(f"@@@@@@ locals: {self.locals}")
         # print(f"@@@@@@ n_calls: {self.n_calls}, obs_tensor: {self.locals['obs_tensor'].shape}, new_obs: {self.locals['new_obs'].shape}, actions: {self.locals['actions'].shape}")
         num_envs = self.locals['actions'].shape[0]
         if self.n_calls == 1:
-            print(f"@@@@@@ n_calls: {self.n_calls}, SAVE new_obs to {self.obs_tensor_path}")
-            th.save(self.locals['new_obs'].tolist()[0], self.obs_tensor_path)
+            print(f"@@@@@@ n_calls: {self.n_calls}, SAVE new_obs to {os.path.join(self.models_dir, 'obs_tensor')}")
+            th.save(self.locals['new_obs'].tolist()[0], os.path.join(self.models_dir, "obs_tensor"))
 
         input_data = th.cat((self.locals['obs_tensor'].to(self.device), th.from_numpy(self.locals['actions']).to(self.device)), -1)
         target_data = th.from_numpy(self.locals['new_obs']).to(self.device)
@@ -398,7 +479,7 @@ class Observation_imagination_rnn_Callback(BaseCallback):
         train_loader = th.utils.data.DataLoader(dataset=dataset, batch_size=num_envs, shuffle=False)
 
         if self.n_calls > 0 and self.n_calls % self.max_episode_steps == 0:
-            for epoch in range(1, self.epochs + 1):
+            for _ in range(1, self.epochs + 1):
                 loss = self.train(train_loader)
 
             print(f"@@@@@@ obs_img_model Training n_calls: {self.n_calls}, Loss: {loss.item():.6f}")
@@ -406,6 +487,13 @@ class Observation_imagination_rnn_Callback(BaseCallback):
 
             self.episode_input = []
             self.episode_target = []
+
+            if self.n_calls % self.eval_freq == 0:
+                mean_reward_obs, std_reward_obs, mean_z_rotation_obs, std_z_rotation_obs = self.evaluate()
+                print(f"@@@@@@ Eval obs_img_model n_calls: {self.n_calls},  " f"episode_reward={mean_reward_obs:.2f} +/- {std_reward_obs:.2f}", f"episode_z_rotation={mean_z_rotation_obs:.2f} +/- {std_z_rotation_obs:.2f}")
+                # Add to current Logger
+                self.logger.record("eval/obs_model_mean_reward", float(mean_reward_obs))
+                self.logger.record("eval/obs_model_mean_z_rotation", float(mean_z_rotation_obs))
 
             if self.n_calls > 2000000 and loss < self.min_loss:
                 self.min_loss = loss
