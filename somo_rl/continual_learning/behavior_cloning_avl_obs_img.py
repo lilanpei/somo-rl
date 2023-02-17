@@ -80,12 +80,12 @@ class Policy_rollout:
                 for _ in tqdm(range(1000)):
                     obs = th.load(os.path.join(models_dir, "obs_tensor"), map_location=th.device('cpu'))   
                     for _ in range(self.run_config["max_episode_steps"]):
-                        obs = th.tensor(obs)
+                        obs = th.FloatTensor(obs)
                         list_observations.append(obs)
                         action, _ = rl_model.predict(obs, deterministic=False)
-                        action = th.tensor(action)
+                        action = th.FloatTensor(action)
                         input_data = th.cat((obs, action), -1)
-                        obs = obs_img_mlp_model(input_data)
+                        obs = obs_img_mlp_model(input_data).detach().numpy()
                         list_actions.append(action)
             else:
                 print(f"@@@@@@ Preparing data from the rl_agent and env from: {models_dir}")
