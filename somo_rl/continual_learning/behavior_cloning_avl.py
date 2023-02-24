@@ -10,6 +10,8 @@ from torch import nn
 from torch import optim
 from torch.nn import Module
 from torch.optim import Optimizer
+import torch as th
+from tqdm import tqdm
 from stable_baselines3 import PPO, A2C
 from stable_baselines3.common.utils import set_random_seed
 from avalanche.benchmarks.utils import AvalancheTensorDataset, AvalancheDataset, AvalancheConcatDataset, as_regression_dataset
@@ -36,7 +38,8 @@ class Policy_rollout:
         self.train_expert_dataset = None
         self.test_expert_dataset = None
         self.run_dir, self.run_config = load_run_config_file(run_ID=run_ID, exp_abs_path=exp_abs_path)
-        self.env = load_env(self.run_config, render=render, debug=debug)
+        self.env = load_env(self.run_config, render=False, debug=debug)
+        self.render = render
         self.load_rollouts()
 
     def load_rollouts(self):
@@ -45,19 +48,38 @@ class Policy_rollout:
             expert_observations, expert_actions = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"]
             print(f"Using saved data from : {saved_data_path}")
         else:
-            print(f"Preparing data from: {os.path.join(self.run_dir, 'results/processed_data/')}")
-            actions_df_list = []
-            observations_df_list = []
-            for run in os.scandir(os.path.join(self.run_dir, "results/processed_data/")):
-                if os.path.isdir(run):
-                    actions_df_list.append(pd.read_pickle(os.path.join(run.path, 'actions.pkl')).iloc[:, :8])
-                    observations_df_list.append(pd.read_pickle(os.path.join(run.path, 'observations.pkl')))
+            if os.listdir(os.path.join(self.run_dir, "results/processed_data/")):
+                print(f"@@@@@@ Preparing data from: {os.path.join(self.run_dir, 'results/processed_data/')}")
+                actions_df_list = []
+                observations_df_list = []
+                for run in os.scandir(os.path.join(self.run_dir, "results/processed_data/")):
+                    if os.path.isdir(run):
+                        actions_df_list.append(pd.read_pickle(os.path.join(run.path, 'actions.pkl')).iloc[:, :8])
+                        observations_df_list.append(pd.read_pickle(os.path.join(run.path, 'observations.pkl')))
 
-            actions_df = pd.concat(actions_df_list)
-            observations_df = pd.concat(observations_df_list)
+                actions_df = pd.concat(actions_df_list)
+                observations_df = pd.concat(observations_df_list)
 
-            expert_observations, expert_actions = observations_df.to_numpy(), actions_df.to_numpy()
-
+                expert_observations, expert_actions = observations_df.to_numpy(), actions_df.to_numpy()
+            else:
+                models_dir = os.path.join(self.run_dir, f"models")
+                alg = construct_policy_model.ALGS[self.run_config["alg"]]
+                rl_agent= alg.load(os.path.join(models_dir, "best_model"))
+                list_observations = []
+                list_actions = []
+                print(f"@@@@@@ Preparing data from the rl_agent and env from: {models_dir}")
+                for epi in tqdm(range(1000)):
+                    obs = self.env.reset(run_render=False)#self.render)
+                    if epi==0: # save the observation after env.reset
+                        th.save(obs, os.path.join(models_dir, "obs_tensor_env_reset"))
+                    for _ in range(self.run_config["max_episode_steps"]):
+                        list_observations.append(th.tensor(obs))
+                        action, _ = rl_agent.predict(obs, deterministic=False)
+                        obs, _, _, info = self.env.step(action)
+                        list_actions.append(th.tensor(action))
+                    print(f"@@@@@@ Episode_{epi}, z_rotation: {info['z_rotation_step']}")
+                expert_observations, expert_actions = (th.stack(list_observations)).detach().numpy(), (th.stack(list_actions)).detach().numpy()
+                # self.env.close()
             np.savez_compressed(
                 os.path.join(self.run_dir, f"expert_data_{self.run_config['object']}"),
                 expert_observations=expert_observations,
