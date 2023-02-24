@@ -2,6 +2,8 @@ import os
 import sys
 import numpy as np
 import torch as th
+from torch import nn
+import gym
 from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv
 
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
@@ -61,6 +63,7 @@ def evaluate_policy(model, run_ID, env=None, n_eval_episodes=10, deterministic=T
 def evaluate_obs_model_rnn(agent, obs_model, run_ID, env=None, n_eval_episodes=10, deterministic=True, render=False):
     _, run_config = load_run_config_file(run_ID)
     print("@@@@@@ _evaluate_obs_model_rnn_")
+    loss_fn = nn.MSELoss()
     device = "cuda" if th.cuda.is_available() else "cpu"
     close = False
     if not env:
@@ -84,10 +87,13 @@ def evaluate_obs_model_rnn(agent, obs_model, run_ID, env=None, n_eval_episodes=1
         hidden = None
         for step in range(num_steps):
             action, _ = agent.predict(obs.cpu(), deterministic=deterministic)
+            # if isinstance(agent.action_space, gym.spaces.Box):
+            #     clipped_action = np.clip(action, agent.action_space.low, agent.action_space.high)
             input_obs_model = th.cat((obs.to(device), th.as_tensor(action).to(device)), -1)
             obs, hidden = obs_model(input_obs_model.view(1, n_envs, input_obs_model.shape[-1]), hidden)
-            obs = th.squeeze(obs)
-            _, reward, _, info = env.step(action)
+            obs = th.squeeze(obs).view(n_envs, obs.shape[-1])
+            obs_env, reward, _, info = env.step(action) # clipped_action
+            print(f"Loss of obs_model_gru step: {step}, {loss_fn(obs, th.from_numpy(obs_env)):.6f}")
             total_reward += reward
 
             if render:
@@ -114,6 +120,7 @@ def evaluate_obs_model_rnn(agent, obs_model, run_ID, env=None, n_eval_episodes=1
 def evaluate_obs_model_mlp(agent, obs_model, run_ID, env=None, n_eval_episodes=10, deterministic=True, render=False):
     _, run_config = load_run_config_file(run_ID)
     print("@@@@@@ _evaluate_obs_model_mlp_")
+    loss_fn = nn.MSELoss()
     device = "cuda" if th.cuda.is_available() else "cpu"
     close = False
     if not env:
@@ -139,7 +146,8 @@ def evaluate_obs_model_mlp(agent, obs_model, run_ID, env=None, n_eval_episodes=1
             action, _ = agent.predict(obs.cpu(), deterministic=deterministic)
             input_obs_model = th.cat((obs.to(device), th.as_tensor(action).to(device)), -1)
             obs = obs_model(input_obs_model)
-            _, reward, _, info = env.step(action)
+            obs_env, reward, _, info = env.step(action)
+            print(f"Loss of obs_model_mlp step: {step}, {loss_fn(obs, th.from_numpy(obs_env)):.6f}")
             total_reward += reward
 
             if render:
