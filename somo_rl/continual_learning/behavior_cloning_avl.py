@@ -16,7 +16,7 @@ from stable_baselines3 import PPO, A2C
 from stable_baselines3.common.utils import set_random_seed
 from avalanche.benchmarks.utils import AvalancheTensorDataset, AvalancheDataset, AvalancheConcatDataset, as_regression_dataset
 from avalanche.benchmarks.generators import dataset_benchmark
-from avalanche.training.supervised import Naive, EWC, JointTraining, Replay
+from avalanche.training.supervised import Naive, Cumulative, EWC, JointTraining, Replay, AGEM, GEM, GSS_greedy, GDumb, SynapticIntelligence, MAS
 from avalanche.training.plugins import ReplayPlugin, EWCPlugin
 from avalanche.training.plugins.lr_scheduling import LRSchedulerPlugin
 from avalanche.training.templates.supervised import SupervisedTemplate
@@ -30,6 +30,15 @@ from somo_rl.utils import construct_policy_model
 from somo_rl.utils.load_env import load_env
 from somo_rl.utils.evaluate_policy import evaluate_policy
 from somo_rl.utils.load_run_config_file import load_run_config_file
+
+target_z_rotation = {
+    'cube'  : 225,
+    'rect'  : 125,
+    'bunny' : 150,
+    'cross' : 180,
+    'teddy' : 125
+}
+Length_Experience = 100000
 
 
 class Policy_rollout:
@@ -48,7 +57,7 @@ class Policy_rollout:
             expert_observations, expert_actions = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"]
             print(f"Using saved data from : {saved_data_path}")
         else:
-            if os.listdir(os.path.join(self.run_dir, "results/processed_data/")):
+            if os.path.isdir(os.path.join(self.run_dir, "results/processed_data/")) and os.listdir(os.path.join(self.run_dir, "results/processed_data/")):
                 print(f"@@@@@@ Preparing data from: {os.path.join(self.run_dir, 'results/processed_data/')}")
                 actions_df_list = []
                 observations_df_list = []
@@ -68,18 +77,24 @@ class Policy_rollout:
                 list_observations = []
                 list_actions = []
                 print(f"@@@@@@ Preparing data from the rl_agent and env from: {models_dir}")
-                for epi in tqdm(range(1000)):
+                # for epi in tqdm(range(Length_Experience)):
+                while len(list_actions) < Length_Experience:
+                    episodic_list_observations = []
+                    episodic_list_actions = []
                     obs = self.env.reset(run_render=False)#self.render)
-                    if epi==0: # save the observation after env.reset
+                    if len(list_actions)==0: # save the observation after env.reset
                         th.save(obs, os.path.join(models_dir, "obs_tensor_env_reset"))
                     for _ in range(self.run_config["max_episode_steps"]):
-                        list_observations.append(th.tensor(obs))
+                        episodic_list_observations.append(th.tensor(obs))
                         action, _ = rl_agent.predict(obs, deterministic=False)
                         obs, _, _, info = self.env.step(action)
-                        list_actions.append(th.tensor(action))
-                    print(f"@@@@@@ Episode_{epi}, z_rotation: {info['z_rotation_step']}")
+                        episodic_list_actions.append(th.tensor(action))
+                    print(f"@@@@@@ {self.run_config['object']}, length: {len(list_actions)}, z_rotation: {info['z_rotation_step']}")
+                    if info['z_rotation_step'] > target_z_rotation[self.run_config['object']]:
+                        list_observations = list_observations + episodic_list_observations
+                        list_actions = list_actions + episodic_list_actions
                 expert_observations, expert_actions = (th.stack(list_observations)).detach().numpy(), (th.stack(list_actions)).detach().numpy()
-                # self.env.close()
+                self.env.close()
             np.savez_compressed(
                 os.path.join(self.run_dir, f"expert_data_{self.run_config['object']}"),
                 expert_observations=expert_observations,
@@ -185,13 +200,13 @@ class Pretrain_agent:
                  n_eval_episodes,
                  render,
                  expert_objects,
-                 batch_size=1,
+                 batch_size=100,
                  epochs=10,
                  scheduler_gamma=0.7,
                  learning_rate=1,
                  no_cuda=False,
                  seed=1,
-                 test_batch_size=2,
+                 test_batch_size=100,
                  ewc_lambda=3000,
                  ):
         self.student = student
@@ -230,7 +245,7 @@ class Pretrain_agent:
             StepLR(optimizer, step_size=1, gamma=self.scheduler_gamma)
         )
         # create strategy
-        print(f"strategy_name : {self.strategy_name}")
+        print(f"@@@@@@ strategy_name : {self.strategy_name}")
         if self.strategy_name == "JointTraining":
             self.strategy = JointTraining(
                 self.model,
@@ -257,7 +272,41 @@ class Pretrain_agent:
                     f"z rotation student on {self.expert_objects[idx]} env = {mean_z_rotation_student:.2f} +/- {std_z_rotation_student:.2f}")
 
         else:
-            if self.strategy_name == "EWC":
+            if self.strategy_name == "Cumulative":
+                self.strategy = Cumulative(
+                    self.model,
+                    optimizer,
+                    self.criterion,
+                    train_epochs=self.epochs,
+                    device=self.device,
+                    train_mb_size=self.batch_size,
+                    plugins=[sched],
+                )
+            elif self.strategy_name == "GEM":
+                    self.strategy = GEM(
+                    self.model,
+                    optimizer,
+                    self.criterion,
+                    25000, #patterns_per_exp, Patterns to store in the memory for each experience
+                    0.5, #memory_strength, Offset to add to the projection direction
+                    train_epochs=self.epochs,
+                    device=self.device,
+                    train_mb_size=self.batch_size,
+                    plugins=[sched],
+                )
+            elif self.strategy_name == "AGEM":
+                    self.strategy = AGEM(
+                    self.model,
+                    optimizer,
+                    self.criterion,
+                    25000, #patterns_per_exp, Patterns to store in the memory for each experience
+                    100, #sample_size, Number of patterns to sample from memory when projecting gradient
+                    train_epochs=self.epochs,
+                    device=self.device,
+                    train_mb_size=self.batch_size,
+                    plugins=[sched],
+                )
+            elif self.strategy_name == "EWC":
                 self.strategy = EWC(
                     self.model,
                     optimizer,
@@ -269,11 +318,58 @@ class Pretrain_agent:
                     train_mb_size=self.batch_size,
                     plugins=[sched],
                 )
+            elif self.strategy_name == "GDumb":
+                self.strategy = GDumb(
+                    self.model,
+                    optimizer,
+                    mem_size=10000,
+                    criterion=self.criterion,
+                    train_mb_size=self.batch_size,
+                    train_epochs=self.epochs,
+                    device=self.device,
+                    plugins=[sched],
+                )
+            elif self.strategy_name == "MAS":
+                self.strategy = MAS(
+                    self.model,
+                    optimizer,
+                    criterion=self.criterion,
+                    lambda_reg=1.0,
+                    alpha=0.5,
+                    train_mb_size=self.batch_size,
+                    train_epochs=self.epochs,
+                    device=self.device,
+                    plugins=[sched],
+                )
+            elif self.strategy_name == "SynapticIntelligence":
+                self.strategy = SynapticIntelligence(
+                    self.model,
+                    optimizer,
+                    criterion=self.criterion,
+                    si_lambda=0.01,
+                    eps=1e-07,
+                    train_mb_size=self.batch_size,
+                    train_epochs=self.epochs,
+                    device=self.device,
+                    plugins=[sched],
+                )
+            elif self.strategy_name == "GSS_greedy":
+                self.strategy = GSS_greedy(
+                    self.model,
+                    optimizer,
+                    mem_size=10000,
+                    mem_strength=1,
+                    criterion=self.criterion,
+                    train_mb_size=self.batch_size,
+                    train_epochs=self.epochs,
+                    device=self.device,
+                    plugins=[sched],
+                )
             elif self.strategy_name == "Replay":
                 self.strategy = Replay(
                     self.model,
                     optimizer,
-                    mem_size=100000,
+                    mem_size=10000,
                     criterion=self.criterion,
                     train_mb_size=self.batch_size,
                     train_epochs=self.epochs,
@@ -339,7 +435,7 @@ class Pretrain_agent:
                 # evaluate policy
                 for idx in range(self.num_experts):
                     mean_reward_student, std_reward_student, mean_z_rotation_student, std_z_rotation_student = evaluate_policy(
-                        model=self.student, run_ID=self.run_IDs[idx], n_eval_episodes=self.n_eval_episodes, deterministic=False,
+                        model=self.student, run_ID=self.run_IDs[idx], n_eval_episodes=self.n_eval_episodes, deterministic=True,
                         render=self.render)
                     print(
                         f"Mean reward student on {self.expert_objects[idx]} env = {mean_reward_student:.2f} +/- {std_reward_student:.2f}")
@@ -357,26 +453,27 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
     for idx in range(num_experts):
         expert_policy.append(Policy_rollout(exp_abs_path=exp_abs_path, run_ID=run_IDs[idx], render=render, debug=debug))
 
-    # if num_experts > 1:
-    #     # Evaluate the expert trained for multi-objects manipulation
-    #     # baseline_runID = [run_IDs[0][0], "PPO_multi_objects", run_IDs[0][-1]]
-    #     baseline_run_group_name = (list(run_IDs[0][1].split("_")))[0] + "_" + "_".join([(list(run_IDs[i][1].split("_")))[-1] for i in range(num_experts)])
-    #     baseline_runID = [run_IDs[0][0], baseline_run_group_name, run_IDs[0][-1]]
-    #     try:
-    #         baseline_run_dir, baseline_run_config = load_run_config_file(baseline_runID)
-    #         for i in range(num_experts):
-    #             alg = construct_policy_model.ALGS[expert_policy[i].run_config["alg"]]
-    #             mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
-    #                 model=alg.load(os.path.join(baseline_run_dir, "models/best_model")), run_ID=run_IDs[i],
-    #                 n_eval_episodes=n_eval_episodes, deterministic=False, render=render)
-    #             print(
-    #                 f"Mean reward {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
-    #             print(
-    #                 f"z rotation {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_z_rotation_expert:.2f} +/- {std_z_rotation_expert:.2f}")
-    #     except:
-    #         print(f"Exception : The expert trained for multi-objects manipulation does not exist : {baseline_runID}")
+    if num_experts > 1:
+        # Evaluate the expert trained for multi-objects manipulation
+        # baseline_runID = [run_IDs[0][0], "PPO_multi_objects", run_IDs[0][-1]]
+        baseline_run_group_name = (list(run_IDs[0][1].split("_")))[0] + "_" + "_".join([(list(run_IDs[i][1].split("_")))[-1] for i in range(num_experts)])
+        baseline_runID = [run_IDs[2][0], baseline_run_group_name, run_IDs[0][-1]]
+        print(f"@@@@@@ baseline_runID: {baseline_runID}")
+        try:
+            baseline_run_dir, baseline_run_config = load_run_config_file(baseline_runID)
+            for i in range(num_experts):
+                alg = construct_policy_model.ALGS[expert_policy[i].run_config["alg"]]
+                mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
+                    model=alg.load(os.path.join(baseline_run_dir, "models/best_model")), run_ID=run_IDs[i],
+                    n_eval_episodes=n_eval_episodes, deterministic=True, render=render)
+                print(
+                    f"Mean reward {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
+                print(
+                    f"z rotation {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_z_rotation_expert:.2f} +/- {std_z_rotation_expert:.2f}")
+        except:
+            print(f"Exception : The expert trained for multi-objects manipulation does not exist : {baseline_runID}")
 
-    # # Evaluate the expert trained for individual-object manipulation
+    # # Evaluate the expert trained for individual-object manipulation, deterministic=False
     # for idx in range(num_experts):
     #     for j in range(num_experts):
     #         alg = construct_policy_model.ALGS[expert_policy[idx].run_config["alg"]]
@@ -384,9 +481,22 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
     #             model=alg.load(os.path.join(expert_policy[idx].run_dir, "models/best_model")), run_ID=run_IDs[j],
     #             n_eval_episodes=n_eval_episodes, deterministic=False, render=render)
     #         print(
-    #             f"Mean reward {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
+    #             f"@@@@@@ stochastic: Mean reward {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
     #         print(
-    #             f"z rotation {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_z_rotation_expert:.2f} +/- {std_z_rotation_expert:.2f}")
+    #             f"@@@@@@ stochastic: z rotation {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_z_rotation_expert:.2f} +/- {std_z_rotation_expert:.2f}")
+
+    # Evaluate the expert trained for individual-object manipulation, deterministic=True
+    for idx in range(num_experts):
+        for j in range(num_experts):
+            alg = construct_policy_model.ALGS[expert_policy[idx].run_config["alg"]]
+            mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
+                model=alg.load(os.path.join(expert_policy[idx].run_dir, "models/best_model")), run_ID=run_IDs[j],
+                n_eval_episodes=n_eval_episodes, deterministic=True, render=render)
+            print(
+                f"@@@@@@ deterministic: Mean reward {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
+            print(
+                f"@@@@@@ deterministic: z rotation {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_z_rotation_expert:.2f} +/- {std_z_rotation_expert:.2f}")
+
 
     # Construct a student agent for behavior cloning
     student = construct_policy_model.construct_policy_model(expert_policy[0].run_config["alg"],
@@ -396,7 +506,7 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
     # # Evaluate the initial student policy
     # for idx in range(num_experts):
     #     mean_reward_student, std_reward_student, mean_z_rotation_student, std_z_rotation_student = evaluate_policy(
-    #         model=student, run_ID=run_IDs[idx], n_eval_episodes=n_eval_episodes, deterministic=False, render=render)
+    #         model=student, run_ID=run_IDs[idx], n_eval_episodes=n_eval_episodes, deterministic=True, render=render)
     #     print(
     #         f"Mean reward student on {expert_policy[idx].run_config['object']} env = {mean_reward_student:.2f} +/- {std_reward_student:.2f}")
     #     print(
@@ -411,6 +521,8 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
         train_expert, test_expert = random_split(
             expert_policy[i].expert_dataset, [train_size, test_size]
         )
+        # train_expert, test_expert = expert_policy[i].expert_dataset[:train_size], expert_policy[i].expert_dataset[train_size:]
+
         train_expert_dataset.append(train_expert)
         test_expert_dataset.append(test_expert)
 
@@ -519,6 +631,27 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
+        "-e5",
+        "--exp_name_5",
+        help="Experiment name 5",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        "-g5",
+        "--run_group_name_5",
+        help="Run-group name 5",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        "-r5",
+        "--run_name_5",
+        help="Run Name 5",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
         "--exp_abs_path",
         help="Experiment directory absolute path",
         required=False,
@@ -577,5 +710,8 @@ if __name__ == "__main__":
     if arg.exp_name_4 and arg.run_group_name_4 and arg.run_name_4:
         run_ID_4 = [arg.exp_name_4, arg.run_group_name_4, arg.run_name_4]
         run_IDs.append(run_ID_4)
+    if arg.exp_name_5 and arg.run_group_name_5 and arg.run_name_5:
+        run_ID_5 = [arg.exp_name_5, arg.run_group_name_5, arg.run_name_5]
+        run_IDs.append(run_ID_5)
 
     run(run_IDs=run_IDs, exp_abs_path=arg.exp_abs_path, render=arg.render, seed=seed, n_eval_episodes=n_eval_episodes, strategy_name=arg.strategies)
