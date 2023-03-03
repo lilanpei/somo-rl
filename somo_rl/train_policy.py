@@ -251,8 +251,8 @@ def run(
 
     eval_run_ID = deepcopy(run_ID)
     eval_run_ID.append("EVAL_ENV")
-    obs_model_eval_run_ID = deepcopy(run_ID)
-    obs_model_eval_run_ID.append("OBS_MODEL_EVAL_ENV")
+    # obs_model_eval_run_ID = deepcopy(run_ID)
+    # obs_model_eval_run_ID.append("OBS_MODEL_EVAL_ENV")
 
     # separate evaluation env
     eval_env = SubprocVecEnv(
@@ -270,20 +270,20 @@ def run(
         start_method="forkserver",
     )
 
-    obs_model_eval_env = SubprocVecEnv(
-        [
-            make_env(
-                env_id=env_id,
-                run_config=run_config,
-                max_episode_steps=run_config["max_episode_steps"],
-                rank=i,
-                run_ID=obs_model_eval_run_ID,
-                is_eval_env=True
-            )
-            for i in range(num_threads)
-        ],
-        start_method="forkserver",
-    )
+    # obs_model_eval_env = SubprocVecEnv(
+    #     [
+    #         make_env(
+    #             env_id=env_id,
+    #             run_config=run_config,
+    #             max_episode_steps=run_config["max_episode_steps"],
+    #             rank=i,
+    #             run_ID=obs_model_eval_run_ID,
+    #             is_eval_env=True
+    #         )
+    #         for i in range(num_threads)
+    #     ],
+    #     start_method="forkserver",
+    # )
 
     # create callbacks
     eval_callback = Multi_Obj_EvalCallback(
@@ -299,25 +299,25 @@ def run(
         save_path=checkpoints_dir,
     )
 
-    Observation_imagination_rnn_callback = Observation_imagination_rnn_Callback(
-        run_ID=run_ID,
-        obs_model_eval_env=obs_model_eval_env,
-        models_dir=models_dir,
-        n_eval_episodes=run_config["eval_cb"]["n_eval_episodes"],
-        max_episode_steps=run_config["max_episode_steps"],
-        save_freq=run_config["checkpoint_cb"]["save_freq"],
-        eval_freq=run_config["eval_cb"]["eval_freq"],
-    )
+    # Observation_imagination_rnn_callback = Observation_imagination_rnn_Callback(
+    #     run_ID=run_ID,
+    #     obs_model_eval_env=obs_model_eval_env,
+    #     models_dir=models_dir,
+    #     n_eval_episodes=run_config["eval_cb"]["n_eval_episodes"],
+    #     max_episode_steps=run_config["max_episode_steps"],
+    #     save_freq=run_config["checkpoint_cb"]["save_freq"],
+    #     eval_freq=run_config["eval_cb"]["eval_freq"],
+    # )
 
-    Observation_imagination_callback = Observation_imagination_Callback(
-        run_ID=run_ID,
-        obs_model_eval_env=obs_model_eval_env,
-        models_dir=models_dir,
-        n_eval_episodes=run_config["eval_cb"]["n_eval_episodes"],
-        max_episode_steps=run_config["max_episode_steps"],
-        save_freq=run_config["checkpoint_cb"]["save_freq"],
-        eval_freq=run_config["eval_cb"]["eval_freq"],
-    )
+    # Observation_imagination_callback = Observation_imagination_Callback(
+    #     run_ID=run_ID,
+    #     obs_model_eval_env=obs_model_eval_env,
+    #     models_dir=models_dir,
+    #     n_eval_episodes=run_config["eval_cb"]["n_eval_episodes"],
+    #     max_episode_steps=run_config["max_episode_steps"],
+    #     save_freq=run_config["checkpoint_cb"]["save_freq"],
+    #     eval_freq=run_config["eval_cb"]["eval_freq"],
+    # )
 
     # savebest_callback = SaveOnBestTrainingRewardCallback(
     #     check_freq=run_config["eval_cb"]["eval_freq"],
@@ -330,7 +330,8 @@ def run(
     # )
 
     # callback = CallbackList([eval_callback, checkpoint_callback, Observation_imagination_callback])
-    callback = CallbackList([eval_callback, checkpoint_callback, Observation_imagination_rnn_callback])
+    # callback = CallbackList([eval_callback, checkpoint_callback, Observation_imagination_rnn_callback])
+    callback = CallbackList([eval_callback, checkpoint_callback])
 
     policy_kwargs = {}
     if run_config["alg"] == "PPO":
