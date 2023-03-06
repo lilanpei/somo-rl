@@ -30,6 +30,7 @@ from somo_rl.utils import construct_policy_model
 from somo_rl.utils.load_env import load_env
 from somo_rl.utils.evaluate_policy import evaluate_policy
 from somo_rl.utils.load_run_config_file import load_run_config_file
+from user_settings import EXPERIMENT_ABS_PATH
 
 target_z_rotation = {
     'cube'  : 225,
@@ -223,6 +224,7 @@ class Pretrain_agent:
         self.expert_objects = expert_objects
         self.ewc_lambda = ewc_lambda
         self.strategy_name = strategy_name
+        self.videos_dir = os.path.join(EXPERIMENT_ABS_PATH, "render_vids")
 
         self.use_cuda = not self.no_cuda and th.cuda.is_available()
         self.device = th.device("cuda" if self.use_cuda else "cpu")
@@ -261,11 +263,16 @@ class Pretrain_agent:
             self.student.policy = self.strategy.model.model
 
             # evaluate policy
+            print(f"@@@@@@ render: {self.render}")
             for idx in range(self.num_experts):
+                if self.render:
+                    os.makedirs(self.videos_dir, exist_ok=True)
+                    vid_filename = os.path.join(self.videos_dir, str(self.strategy_name) + "_" + str(self.expert_objects[idx]) + "_render_vid.mp4")
+                    print("@@@@@@ ", vid_filename)
+
                 mean_reward_student, std_reward_student, mean_z_rotation_student, std_z_rotation_student = evaluate_policy(
                     model=self.student, run_ID=self.run_IDs[idx], n_eval_episodes=self.n_eval_episodes,
-                    deterministic=False,
-                    render=self.render)
+                    deterministic=False, render=self.render, vid_filename=vid_filename)
                 print(
                     f"Mean reward student on {self.expert_objects[idx]} env = {mean_reward_student:.2f} +/- {std_reward_student:.2f}")
                 print(
@@ -434,9 +441,13 @@ class Pretrain_agent:
 
                 # evaluate policy
                 for idx in range(self.num_experts):
+                    if self.render:
+                        os.makedirs(self.videos_dir, exist_ok=True)
+                        vid_filename = os.path.join(self.videos_dir, "experience_" + str(experience.current_experience) + "_" + str(self.strategy_name) + "_" + str(self.expert_objects[idx]) + "_render_vid.mp4")
+                        print("@@@@@@ ", vid_filename)
                     mean_reward_student, std_reward_student, mean_z_rotation_student, std_z_rotation_student = evaluate_policy(
                         model=self.student, run_ID=self.run_IDs[idx], n_eval_episodes=self.n_eval_episodes, deterministic=True,
-                        render=self.render)
+                        render=self.render, vid_filename=vid_filename)
                     print(
                         f"Mean reward student on {self.expert_objects[idx]} env = {mean_reward_student:.2f} +/- {std_reward_student:.2f}")
                     print(
@@ -462,10 +473,14 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
         try:
             baseline_run_dir, baseline_run_config = load_run_config_file(baseline_runID)
             for i in range(num_experts):
+                if render:
+                    os.makedirs(os.path.join(EXPERIMENT_ABS_PATH, "render_vids"), exist_ok=True)
+                    vid_filename = os.path.join(EXPERIMENT_ABS_PATH, "render_vids",  "Oracle_Agent_on_" + str(expert_policy[i].run_config['object']) + "_render_vid.mp4")
+                    print("@@@@@@ ", vid_filename)
                 alg = construct_policy_model.ALGS[expert_policy[i].run_config["alg"]]
                 mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
                     model=alg.load(os.path.join(baseline_run_dir, "models/best_model")), run_ID=run_IDs[i],
-                    n_eval_episodes=n_eval_episodes, deterministic=True, render=render)
+                    n_eval_episodes=n_eval_episodes, deterministic=True, render=render, vid_filename=vid_filename)
                 print(
                     f"Mean reward {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
                 print(
@@ -476,10 +491,14 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
     # # Evaluate the expert trained for individual-object manipulation, deterministic=False
     # for idx in range(num_experts):
     #     for j in range(num_experts):
+    #        if render:
+    #            os.makedirs(os.path.join(EXPERIMENT_ABS_PATH, "render_vids"), exist_ok=True)
+    #            vid_filename = os.path.join(EXPERIMENT_ABS_PATH, "render_vids",  str(expert_policy[idx].run_config['object']) + "_expert_on_" + str(expert_policy[j].run_config['object']) + "_env_render_vid.mp4")
+    #            print("@@@@@@ ", vid_filename)
     #         alg = construct_policy_model.ALGS[expert_policy[idx].run_config["alg"]]
     #         mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
     #             model=alg.load(os.path.join(expert_policy[idx].run_dir, "models/best_model")), run_ID=run_IDs[j],
-    #             n_eval_episodes=n_eval_episodes, deterministic=False, render=render)
+    #             n_eval_episodes=n_eval_episodes, deterministic=False, render=render, vid_filename=vid_filename)
     #         print(
     #             f"@@@@@@ stochastic: Mean reward {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
     #         print(
@@ -488,10 +507,14 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
     # Evaluate the expert trained for individual-object manipulation, deterministic=True
     for idx in range(num_experts):
         for j in range(num_experts):
+            if render:
+                os.makedirs(os.path.join(EXPERIMENT_ABS_PATH, "render_vids"), exist_ok=True)
+                vid_filename = os.path.join(EXPERIMENT_ABS_PATH, "render_vids",  str(expert_policy[idx].run_config['object']) + "_expert_on_" + str(expert_policy[j].run_config['object']) + "_env_render_vid.mp4")
+                print("@@@@@@ ", vid_filename)
             alg = construct_policy_model.ALGS[expert_policy[idx].run_config["alg"]]
             mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
                 model=alg.load(os.path.join(expert_policy[idx].run_dir, "models/best_model")), run_ID=run_IDs[j],
-                n_eval_episodes=n_eval_episodes, deterministic=True, render=render)
+                n_eval_episodes=n_eval_episodes, deterministic=True, render=render, vid_filename=vid_filename)
             print(
                 f"@@@@@@ deterministic: Mean reward {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
             print(

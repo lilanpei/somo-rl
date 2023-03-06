@@ -4,6 +4,7 @@ import numpy as np
 import torch as th
 from torch import nn
 import gym
+import pybullet as p
 from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv
 
 path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
@@ -13,7 +14,7 @@ from somo_rl.utils.load_env import load_env
 from somo_rl.utils.load_run_config_file import load_run_config_file
 
 
-def evaluate_policy(model, run_ID, env=None, n_eval_episodes=10, deterministic=True, render=False):
+def evaluate_policy(model, run_ID, env=None, n_eval_episodes=10, deterministic=True, render=False, vid_filename=None):
     _, run_config = load_run_config_file(run_ID)
     close = False
     if not env:
@@ -24,7 +25,7 @@ def evaluate_policy(model, run_ID, env=None, n_eval_episodes=10, deterministic=T
 
     if not isinstance(env, VecEnv):
         if render:
-            _ = env.reset(run_render=render)
+            env.reset(run_render=render)
         env = DummyVecEnv([lambda: env])
 
     n_envs = env.num_envs
@@ -34,7 +35,11 @@ def evaluate_policy(model, run_ID, env=None, n_eval_episodes=10, deterministic=T
     while episode_count < n_eval_episodes:
         total_reward = np.zeros(n_envs)
         obs = env.reset()
-        for step in range(num_steps):
+        if render and vid_filename and episode_count == 0:
+            logIDvideo = p.startStateLogging(
+                p.STATE_LOGGING_VIDEO_MP4, str(vid_filename)
+            )
+        for _ in range(num_steps):
             action, _ = model.predict(obs, deterministic=deterministic)
             obs, reward, _, info = env.step(action)
             total_reward += reward
@@ -42,13 +47,17 @@ def evaluate_policy(model, run_ID, env=None, n_eval_episodes=10, deterministic=T
             if render:
                 env.render()
 
+        if render and vid_filename and episode_count == 0:
+            p.stopStateLogging(logIDvideo)
+
         for i in range(n_envs):
             episode_rewards.append(total_reward[i])
             if 'z_rotation_step' in info[i]:
                 episode_z_rotations.append(info[i]['z_rotation_step'])
             else:
                 episode_z_rotations.append(np.degrees(info[i]['z_rotation']))
-            episode_count += 1
+
+        episode_count += 1
 
     mean_reward = np.mean(episode_rewards)
     std_reward = np.std(episode_rewards)
