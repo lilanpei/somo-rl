@@ -272,7 +272,7 @@ class Pretrain_agent:
 
                 mean_reward_student, std_reward_student, mean_z_rotation_student, std_z_rotation_student = evaluate_policy(
                     model=self.student, run_ID=self.run_IDs[idx], n_eval_episodes=self.n_eval_episodes,
-                    deterministic=False, render=self.render, vid_filename=vid_filename)
+                    deterministic=False, render=self.render, vid_filename=vid_filename if self.render else None)
                 print(
                     f"Mean reward student on {self.expert_objects[idx]} env = {mean_reward_student:.2f} +/- {std_reward_student:.2f}")
                 print(
@@ -447,7 +447,7 @@ class Pretrain_agent:
                         print("@@@@@@ ", vid_filename)
                     mean_reward_student, std_reward_student, mean_z_rotation_student, std_z_rotation_student = evaluate_policy(
                         model=self.student, run_ID=self.run_IDs[idx], n_eval_episodes=self.n_eval_episodes, deterministic=True,
-                        render=self.render, vid_filename=vid_filename)
+                        render=self.render, vid_filename=vid_filename  if self.render else None)
                     print(
                         f"Mean reward student on {self.expert_objects[idx]} env = {mean_reward_student:.2f} +/- {std_reward_student:.2f}")
                     print(
@@ -480,7 +480,7 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
     #             alg = construct_policy_model.ALGS[expert_policy[i].run_config["alg"]]
     #             mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
     #                 model=alg.load(os.path.join(baseline_run_dir, "models/best_model")), run_ID=run_IDs[i],
-    #                 n_eval_episodes=n_eval_episodes, deterministic=True, render=render, vid_filename=vid_filename)
+    #                 n_eval_episodes=n_eval_episodes, deterministic=True, render=render, vid_filename=vid_filename if render else None)
     #             print(
     #                 f"Mean reward {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
     #             print(
@@ -498,7 +498,7 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
     #         alg = construct_policy_model.ALGS[expert_policy[idx].run_config["alg"]]
     #         mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
     #             model=alg.load(os.path.join(expert_policy[idx].run_dir, "models/best_model")), run_ID=run_IDs[j],
-    #             n_eval_episodes=n_eval_episodes, deterministic=False, render=render, vid_filename=vid_filename)
+    #             n_eval_episodes=n_eval_episodes, deterministic=False, render=render, vid_filename=vid_filename  if render else None)
     #         print(
     #             f"@@@@@@ stochastic: Mean reward {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
     #         print(
@@ -514,7 +514,7 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
     #         alg = construct_policy_model.ALGS[expert_policy[idx].run_config["alg"]]
     #         mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
     #             model=alg.load(os.path.join(expert_policy[idx].run_dir, "models/best_model")), run_ID=run_IDs[j],
-    #             n_eval_episodes=n_eval_episodes, deterministic=True, render=render, vid_filename=vid_filename)
+    #             n_eval_episodes=n_eval_episodes, deterministic=True, render=render, vid_filename=vid_filename  if render else None)
     #         print(
     #             f"@@@@@@ deterministic: Mean reward {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
     #         print(
