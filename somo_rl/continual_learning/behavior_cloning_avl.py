@@ -44,7 +44,7 @@ target_z_rotation = {
     'cross' : 180, #150
     'teddy' : 125
 }
-Length_Experience = 100000 # 1000 episodes = 100000 steps
+Length_Experience = 1000 # 1000 episodes = 100000 steps
 
 class RewardPrioritySamplingBuffer(ExemplarsBuffer):
     """Buffer updated with reservoir sampling."""
