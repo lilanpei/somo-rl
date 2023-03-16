@@ -145,10 +145,14 @@ class Policy_rollout:
     def load_rollouts(self):
         saved_data_path = os.path.join(self.run_dir, f"expert_data_{self.run_config['object']}.npz")
         if os.path.isfile(saved_data_path):
-            # expert_observations, expert_actions, episodic_rewards, episodic_z_rotation = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"], np.load(saved_data_path)["episodic_rewards"], np.load(saved_data_path)["episodic_z_rotation"]
-            expert_observations, expert_actions, episodic_rewards = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"], np.load(saved_data_path)["episodic_rewards"]
+            expert_observations, expert_actions, episodic_rewards, episodic_z_rotation = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"], np.load(saved_data_path)["episodic_rewards"], np.load(saved_data_path)["episodic_z_rotation"]
             print(f"Using saved data from : {saved_data_path}")
-            print(f"$$$$$$ load_rollouts - data shape : {expert_observations.shape}, {expert_actions.shape}, {episodic_rewards.shape}")
+            print(f"$$$$$$ load_rollouts - before reshape : {expert_observations.shape}, {expert_actions.shape}, {episodic_rewards.shape}")
+            episodic_rewards =  np.repeat(episodic_rewards, expert_observations.shape[1])
+            episodic_z_rotation =  np.repeat(episodic_z_rotation, expert_observations.shape[1])
+            expert_observations = np.reshape(expert_observations, (-1, expert_observations.shape[-1]))
+            expert_actions = np.reshape(expert_actions, (-1, expert_actions.shape[-1]))
+            print(f"$$$$$$ load_rollouts - after reshape : {expert_observations.shape}, {expert_actions.shape}, {episodic_rewards.shape}")
         else:
             if os.path.isdir(os.path.join(self.run_dir, "results/processed_data/")) and os.listdir(os.path.join(self.run_dir, "results/processed_data/")):
                 print(f"@@@@@@ Preparing data from: {os.path.join(self.run_dir, 'results/processed_data/')}")
@@ -187,11 +191,11 @@ class Policy_rollout:
                         episodic_list_actions.append(th.tensor(action))
                         total_reward += rewards
                     print(f"@@@@@@ {self.run_config['object']}, length: {len(list_actions)}, z_rotation: {info['z_rotation_step']}")
-                    if info['z_rotation_step'] > target_z_rotation[self.run_config['object']]:
-                        list_observations.append(th.stack(episodic_list_observations))
-                        list_actions.append(th.stack(episodic_list_actions))
-                        episodic_rewards.append(round(total_reward))
-                        episodic_z_rotation.append(round(info['z_rotation_step']))
+                    #if info['z_rotation_step'] > target_z_rotation[self.run_config['object']]:
+                    list_observations.append(th.stack(episodic_list_observations))
+                    list_actions.append(th.stack(episodic_list_actions))
+                    episodic_rewards.append(round(total_reward))
+                    episodic_z_rotation.append(round(info['z_rotation_step']))
                 print(f"$$$$$$ shape: {len(list_observations), {th.stack(list_observations).shape}}")
                 expert_observations, expert_actions = (th.stack(list_observations)).detach().numpy(), (th.stack(list_actions)).detach().numpy()
                 print(f"$$$$$$ shape: {expert_observations.shape}, {expert_actions.shape}")
@@ -203,7 +207,13 @@ class Policy_rollout:
                 episodic_rewards=np.array(episodic_rewards),
                 episodic_z_rotation=np.array(episodic_z_rotation)
             )
-        self.expert_dataset = as_regression_dataset(AvalancheTensorDataset(th.tensor(expert_observations), th.tensor(expert_actions), targets=episodic_rewards))
+            print(f"$$$$$$ load_rollouts - before reshape : {expert_observations.shape}, {expert_actions.shape}, {np.array(episodic_rewards).shape}")
+            episodic_rewards =  np.repeat(episodic_rewards, expert_observations.shape[1])
+            episodic_z_rotation =  np.repeat(episodic_z_rotation, expert_observations.shape[1])
+            expert_observations = np.reshape(expert_observations, (-1, expert_observations.shape[-1]))
+            expert_actions = np.reshape(expert_actions, (-1, expert_actions.shape[-1]))
+            print(f"$$$$$$ load_rollouts - after reshape : {expert_observations.shape}, {expert_actions.shape}, {episodic_z_rotation.shape}")
+        self.expert_dataset = as_regression_dataset(AvalancheTensorDataset(th.tensor(expert_observations), th.tensor(expert_actions), targets=episodic_z_rotation))
         print(f"size of expert_dataset_{self.run_config['object']}: {len(self.expert_dataset)}")
 
 
@@ -313,15 +323,15 @@ class Pretrain_agent:
                  n_eval_episodes,
                  render,
                  expert_objects,
-                 batch_size=1, # 1 episode = 100 steps
+                 batch_size=100, # 1 episode = 100 steps
                  epochs=10,
                  scheduler_gamma=0.7,
                  learning_rate=1,
                  no_cuda=False,
                  seed=1,
-                 test_batch_size=1,
+                 test_batch_size=100,
                  ewc_lambda=3000,
-                 mem_size=1000
+                 mem_size=100000
                  ):
         self.student = student
         self.scenario = scenario
@@ -416,7 +426,7 @@ class Pretrain_agent:
                     self.model,
                     optimizer,
                     self.criterion,
-                    200, #patterns_per_exp, Patterns to store in the memory for each experience
+                    20000, #patterns_per_exp, Patterns to store in the memory for each experience
                     0.5, #memory_strength, Offset to add to the projection direction
                     train_epochs=self.epochs,
                     device=self.device,
@@ -428,8 +438,8 @@ class Pretrain_agent:
                     self.model,
                     optimizer,
                     self.criterion,
-                    200, #patterns_per_exp, Patterns to store in the memory for each experience
-                    10, #sample_size, Number of patterns to sample from memory when projecting gradient
+                    20000, #patterns_per_exp, Patterns to store in the memory for each experience
+                    100, #sample_size, Number of patterns to sample from memory when projecting gradient
                     train_epochs=self.epochs,
                     device=self.device,
                     train_mb_size=self.batch_size,

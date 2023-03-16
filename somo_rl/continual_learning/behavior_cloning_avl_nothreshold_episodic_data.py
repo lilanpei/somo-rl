@@ -73,7 +73,7 @@ class RewardPrioritySamplingBuffer(ExemplarsBuffer):
         :param new_data:
         :return:
         """
-        new_weights = th.tensor(new_data.targets) * th.rand(len(new_data))
+        new_weights = th.tensor(new_data.targets)# * th.rand(len(new_data))
         print(f"$$$$$$ new_weights update_from_dataset: {len(new_weights)}, {self.max_size}, {new_weights[:5]}")
 
         cat_weights = th.cat([new_weights, self._buffer_weights])
@@ -145,8 +145,7 @@ class Policy_rollout:
     def load_rollouts(self):
         saved_data_path = os.path.join(self.run_dir, f"expert_data_{self.run_config['object']}.npz")
         if os.path.isfile(saved_data_path):
-            # expert_observations, expert_actions, episodic_rewards, episodic_z_rotation = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"], np.load(saved_data_path)["episodic_rewards"], np.load(saved_data_path)["episodic_z_rotation"]
-            expert_observations, expert_actions, episodic_rewards = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"], np.load(saved_data_path)["episodic_rewards"]
+            expert_observations, expert_actions, episodic_rewards, episodic_z_rotation = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"], np.load(saved_data_path)["episodic_rewards"], np.load(saved_data_path)["episodic_z_rotation"]
             print(f"Using saved data from : {saved_data_path}")
             print(f"$$$$$$ load_rollouts - data shape : {expert_observations.shape}, {expert_actions.shape}, {episodic_rewards.shape}")
         else:
@@ -187,11 +186,11 @@ class Policy_rollout:
                         episodic_list_actions.append(th.tensor(action))
                         total_reward += rewards
                     print(f"@@@@@@ {self.run_config['object']}, length: {len(list_actions)}, z_rotation: {info['z_rotation_step']}")
-                    if info['z_rotation_step'] > target_z_rotation[self.run_config['object']]:
-                        list_observations.append(th.stack(episodic_list_observations))
-                        list_actions.append(th.stack(episodic_list_actions))
-                        episodic_rewards.append(round(total_reward))
-                        episodic_z_rotation.append(round(info['z_rotation_step']))
+                    #if info['z_rotation_step'] > target_z_rotation[self.run_config['object']]:
+                    list_observations.append(th.stack(episodic_list_observations))
+                    list_actions.append(th.stack(episodic_list_actions))
+                    episodic_rewards.append(round(total_reward))
+                    episodic_z_rotation.append(round(info['z_rotation_step']))
                 print(f"$$$$$$ shape: {len(list_observations), {th.stack(list_observations).shape}}")
                 expert_observations, expert_actions = (th.stack(list_observations)).detach().numpy(), (th.stack(list_actions)).detach().numpy()
                 print(f"$$$$$$ shape: {expert_observations.shape}, {expert_actions.shape}")
@@ -203,7 +202,7 @@ class Policy_rollout:
                 episodic_rewards=np.array(episodic_rewards),
                 episodic_z_rotation=np.array(episodic_z_rotation)
             )
-        self.expert_dataset = as_regression_dataset(AvalancheTensorDataset(th.tensor(expert_observations), th.tensor(expert_actions), targets=episodic_rewards))
+        self.expert_dataset = as_regression_dataset(AvalancheTensorDataset(th.tensor(expert_observations), th.tensor(expert_actions), targets=episodic_z_rotation))
         print(f"size of expert_dataset_{self.run_config['object']}: {len(self.expert_dataset)}")
 
 

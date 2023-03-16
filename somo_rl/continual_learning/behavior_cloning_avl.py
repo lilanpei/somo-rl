@@ -145,10 +145,12 @@ class Policy_rollout:
     def load_rollouts(self):
         saved_data_path = os.path.join(self.run_dir, f"expert_data_{self.run_config['object']}.npz")
         if os.path.isfile(saved_data_path):
+            # expert_observations, expert_actions, episodic_rewards, episodic_z_rotation = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"], np.load(saved_data_path)["episodic_rewards"], np.load(saved_data_path)["episodic_z_rotation"]
             expert_observations, expert_actions, episodic_rewards = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"], np.load(saved_data_path)["episodic_rewards"]
             print(f"Using saved data from : {saved_data_path}")
             print(f"$$$$$$ load_rollouts - before reshape : {expert_observations.shape}, {expert_actions.shape}, {episodic_rewards.shape}")
             episodic_rewards =  np.repeat(episodic_rewards, expert_observations.shape[1])
+            # episodic_z_rotation =  np.repeat(episodic_z_rotation, expert_observations.shape[1])
             expert_observations = np.reshape(expert_observations, (-1, expert_observations.shape[-1]))
             expert_actions = np.reshape(expert_actions, (-1, expert_actions.shape[-1]))
             print(f"$$$$$$ load_rollouts - after reshape : {expert_observations.shape}, {expert_actions.shape}, {episodic_rewards.shape}")
@@ -173,6 +175,7 @@ class Policy_rollout:
                 list_observations = []
                 list_actions = []
                 episodic_rewards = []
+                episodic_z_rotation = []
                 print(f"@@@@@@ Preparing data from the rl_agent and env from: {models_dir}")
                 # for epi in tqdm(range(Length_Experience)):
                 while len(list_actions) < Length_Experience:
@@ -181,16 +184,19 @@ class Policy_rollout:
                     obs = self.env.reset(run_render=False)#self.render)
                     if len(list_actions)==0: # save the observation after env.reset
                         th.save(obs, os.path.join(models_dir, "obs_tensor_env_reset"))
+                    total_reward = 0
                     for _ in range(self.run_config["max_episode_steps"]):
                         episodic_list_observations.append(th.tensor(obs))
                         action, _ = rl_agent.predict(obs, deterministic=False)
-                        obs, _, _, info = self.env.step(action)
+                        obs, rewards, _, info = self.env.step(action)
                         episodic_list_actions.append(th.tensor(action))
+                        total_reward += rewards
                     print(f"@@@@@@ {self.run_config['object']}, length: {len(list_actions)}, z_rotation: {info['z_rotation_step']}")
                     if info['z_rotation_step'] > target_z_rotation[self.run_config['object']]:
                         list_observations.append(th.stack(episodic_list_observations))
                         list_actions.append(th.stack(episodic_list_actions))
-                        episodic_rewards.append(round(info['z_rotation_step']))
+                        episodic_rewards.append(round(total_reward))
+                        episodic_z_rotation.append(round(info['z_rotation_step']))
                 print(f"$$$$$$ shape: {len(list_observations), {th.stack(list_observations).shape}}")
                 expert_observations, expert_actions = (th.stack(list_observations)).detach().numpy(), (th.stack(list_actions)).detach().numpy()
                 print(f"$$$$$$ shape: {expert_observations.shape}, {expert_actions.shape}")
@@ -200,12 +206,15 @@ class Policy_rollout:
                 expert_observations=expert_observations,
                 expert_actions=expert_actions,
                 episodic_rewards=np.array(episodic_rewards),
+                episodic_z_rotation=np.array(episodic_z_rotation)
             )
-            print(f"$$$$$$ load_rollouts - before reshape : {expert_observations.shape}, {expert_actions.shape}, {episodic_rewards.shape}")
+            print(f"$$$$$$ load_rollouts - before reshape : {expert_observations.shape}, {expert_actions.shape}, {np.array(episodic_rewards).shape}")
             episodic_rewards =  np.repeat(episodic_rewards, expert_observations.shape[1])
+            episodic_z_rotation =  np.repeat(episodic_z_rotation, expert_observations.shape[1])
             expert_observations = np.reshape(expert_observations, (-1, expert_observations.shape[-1]))
             expert_actions = np.reshape(expert_actions, (-1, expert_actions.shape[-1]))
-            print(f"$$$$$$ load_rollouts - after reshape : {expert_observations.shape}, {expert_actions.shape}, {episodic_rewards.shape}")
+            print(f"$$$$$$ load_rollouts - after reshape : {expert_observations.shape}, {expert_actions.shape}, {episodic_z_rotation.shape}")
+        # self.expert_dataset = as_regression_dataset(AvalancheTensorDataset(th.tensor(expert_observations), th.tensor(expert_actions), targets=episodic_z_rotation))
         self.expert_dataset = as_regression_dataset(AvalancheTensorDataset(th.tensor(expert_observations), th.tensor(expert_actions), targets=episodic_rewards))
         print(f"size of expert_dataset_{self.run_config['object']}: {len(self.expert_dataset)}")
 
