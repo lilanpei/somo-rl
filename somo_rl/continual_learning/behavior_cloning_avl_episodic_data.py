@@ -321,7 +321,7 @@ class Pretrain_agent:
                  seed=1,
                  test_batch_size=1,
                  ewc_lambda=3000,
-                 mem_size=1000
+                 mem_size=Length_Experience
                  ):
         self.student = student
         self.scenario = scenario
@@ -416,7 +416,7 @@ class Pretrain_agent:
                     self.model,
                     optimizer,
                     self.criterion,
-                    200, #patterns_per_exp, Patterns to store in the memory for each experience
+                    Length_Experience//self.num_experts, #patterns_per_exp, Patterns to store in the memory for each experience
                     0.5, #memory_strength, Offset to add to the projection direction
                     train_epochs=self.epochs,
                     device=self.device,
@@ -428,7 +428,7 @@ class Pretrain_agent:
                     self.model,
                     optimizer,
                     self.criterion,
-                    200, #patterns_per_exp, Patterns to store in the memory for each experience
+                    Length_Experience//self.num_experts, #patterns_per_exp, Patterns to store in the memory for each experience
                     10, #sample_size, Number of patterns to sample from memory when projecting gradient
                     train_epochs=self.epochs,
                     device=self.device,

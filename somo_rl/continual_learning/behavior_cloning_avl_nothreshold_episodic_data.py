@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 import argparse
 import numpy as np
 import torch as th
@@ -44,7 +45,7 @@ target_z_rotation = {
     'cross' : 180, #150
     'teddy' : 125
 }
-Length_Experience = 1000 # 1000 episodes = 100000 steps
+Length_Experience = 5 # 1000 episodes = 100000 steps
 
 class RewardPrioritySamplingBuffer(ExemplarsBuffer):
     """Buffer updated with reservoir sampling."""
@@ -73,7 +74,7 @@ class RewardPrioritySamplingBuffer(ExemplarsBuffer):
         :param new_data:
         :return:
         """
-        new_weights = th.tensor(new_data.targets)# * th.rand(len(new_data))
+        new_weights = th.tensor(new_data.targets) * th.rand(len(new_data))
         print(f"$$$$$$ new_weights update_from_dataset: {len(new_weights)}, {self.max_size}, {new_weights[:5]}")
 
         cat_weights = th.cat([new_weights, self._buffer_weights])
@@ -144,6 +145,14 @@ class Policy_rollout:
 
     def load_rollouts(self):
         saved_data_path = os.path.join(self.run_dir, f"expert_data_{self.run_config['object']}.npz")
+        ##################
+        # models_dir = os.path.join(self.run_dir, f"models")
+        # alg = construct_policy_model.ALGS[self.run_config["alg"]]
+        # self.rl_agent= alg.load(os.path.join(models_dir, "best_model"))
+        # self.expert_log_std = self.rl_agent.policy.log_std
+        # self.expert_action_dist = self.rl_agent.policy.action_dist
+        # print("@@@@@@@@@@@@ expert log_std:", self.rl_agent.policy.log_std, self.rl_agent.policy.action_dist)
+        #################
         if os.path.isfile(saved_data_path):
             expert_observations, expert_actions, episodic_rewards, episodic_z_rotation = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"], np.load(saved_data_path)["episodic_rewards"], np.load(saved_data_path)["episodic_z_rotation"]
             print(f"Using saved data from : {saved_data_path}")
@@ -302,8 +311,48 @@ class mymodel(nn.Module):
             return action
 
 
+class customLoss(nn.Module):
+    def __init__(self, policy, expert_policy):
+        super(customLoss, self).__init__()
+        # --------------------------------------------
+        # Initialization
+        self.policy = policy
+        self.expert_policy = expert_policy
+        # --------------------------------------------
+
+    def forward(self, mb_output, mb_y):
+        # --------------------------------------------
+        # Define forward pass
+        print("@@@@@@@@@@:", mb_output.shape, mb_y.shape, self.expert_policy[0].expert_log_std)
+        means_teacher = mb_y
+        # fake_std = th.from_numpy(np.array([1e-6]*len(means_teacher[0][0]))) # for deterministic
+        # fake_std = th.mean(th.stack([th.exp(expert_policy.expert_log_std) for expert_policy in self.expert_policy]), 0)
+        fake_std = th.exp(self.expert_policy[0].expert_log_std)
+        
+        stds_teacher = th.stack([fake_std for x in means_teacher[0]])
+        means_student = mb_output
+        stds_student = th.exp(th.clamp(self.policy.model.log_std, min=math.log(1e-6)))
+        print("@@@@@@@@@@, fake_std:", fake_std.shape)
+        print("@@@@@@@@@@, fake_std:", fake_std)
+        print("@@@@@@@@@@, means_teacher:", means_teacher.shape)
+        print("@@@@@@@@@@, stds_teacher:", stds_teacher.shape)
+        print("@@@@@@@@@@, stds_student:", stds_student.shape)
+        # print("@@@@@@@@@@, stds_student:", self.policy.model.log_std)
+        pi = th.distributions.Normal(loc=means_teacher, scale=stds_teacher)
+        pi_new = th.distributions.Normal(loc=means_student, scale=stds_student)
+        var_ratio = (pi.scale / pi_new.scale).pow(2)
+        t1 = ((pi.loc - pi.loc) / pi_new.scale).pow(2)
+        kl_1 = th.mean(0.5 * (var_ratio + t1 - 1 - var_ratio.log()))
+        print("@@@@@@@@@@ kl1:", kl_1)
+        kl = th.mean(th.distributions.kl.kl_divergence(pi, pi_new))
+        print("@@@@@@@@@@ kl:", kl)
+        return kl
+        # --------------------------------------------
+
+
 class Pretrain_agent:
     def __init__(self,
+                 expert_policy,
                  student,
                  scenario,
                  strategy_name,
@@ -320,8 +369,9 @@ class Pretrain_agent:
                  seed=1,
                  test_batch_size=1,
                  ewc_lambda=3000,
-                 mem_size=1000
+                 mem_size=Length_Experience
                  ):
+        self.expert_policy = expert_policy
         self.student = student
         self.scenario = scenario
         self.batch_size = batch_size
@@ -343,13 +393,15 @@ class Pretrain_agent:
         self.device = th.device("cuda" if self.use_cuda else "cpu")
         self.kwargs = {"num_workers": 1, "pin_memory": True} if self.use_cuda else {}
 
-        self.criterion = nn.MSELoss()
         self.strategy = None
         self.run_IDs = run_IDs
         self.n_eval_episodes = n_eval_episodes
 
         # Extract initial policy
         self.model = mymodel(self.device, self.student)
+
+        self.criterion = nn.MSELoss()
+        # self.criterion = customLoss(self.model, self.expert_policy)
 
         self.bc_reward = []
         self.bc_rotation = []
@@ -415,7 +467,7 @@ class Pretrain_agent:
                     self.model,
                     optimizer,
                     self.criterion,
-                    200, #patterns_per_exp, Patterns to store in the memory for each experience
+                    Length_Experience//self.num_experts, #patterns_per_exp, Patterns to store in the memory for each experience
                     0.5, #memory_strength, Offset to add to the projection direction
                     train_epochs=self.epochs,
                     device=self.device,
@@ -427,7 +479,7 @@ class Pretrain_agent:
                     self.model,
                     optimizer,
                     self.criterion,
-                    200, #patterns_per_exp, Patterns to store in the memory for each experience
+                    Length_Experience//self.num_experts, #patterns_per_exp, Patterns to store in the memory for each experience
                     10, #sample_size, Number of patterns to sample from memory when projecting gradient
                     train_epochs=self.epochs,
                     device=self.device,
@@ -714,7 +766,7 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
 
         # Pretrain the student agent
         expert_objects = [expert_policy[idx].run_config['object'] for idx in range(num_experts)]
-        agent = Pretrain_agent(student, scenario, strategy_name, num_experts, run_IDs, n_eval_episodes, render, expert_objects)
+        agent = Pretrain_agent(expert_policy, student, scenario, strategy_name, num_experts, run_IDs, n_eval_episodes, render, expert_objects)
         run_reward.append(agent.bc_reward)
         run_rotation.append(agent.bc_rotation)
 
