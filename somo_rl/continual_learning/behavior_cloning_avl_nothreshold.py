@@ -6,7 +6,7 @@ import numpy as np
 import torch as th
 import pandas as pd
 from datetime import datetime
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingWarmRestarts
 from torch.utils.data.dataset import random_split
 from torch import nn
 from torch import optim
@@ -38,14 +38,7 @@ from somo_rl.utils.evaluate_policy import evaluate_policy
 from somo_rl.utils.load_run_config_file import load_run_config_file
 from user_settings import EXPERIMENT_ABS_PATH
 
-target_z_rotation = {
-    'cube'  : 225,
-    'rect'  : 125,
-    'bunny' : 150, #125
-    'cross' : 180, #150
-    'teddy' : 125
-}
-Length_Experience = 5 # 1000 episodes = 100000 steps
+Length_Experience = 10 # 1000 episodes = 100000 steps
 
 class RewardPrioritySamplingBuffer(ExemplarsBuffer):
     """Buffer updated with reservoir sampling."""
@@ -74,7 +67,7 @@ class RewardPrioritySamplingBuffer(ExemplarsBuffer):
         :param new_data:
         :return:
         """
-        new_weights = th.tensor(new_data.targets)# * th.rand(len(new_data))
+        new_weights = th.tensor(new_data.targets) * th.rand(len(new_data))
         print(f"$$$$$$ new_weights update_from_dataset: {len(new_weights)}, {self.max_size}, {new_weights[:5]}")
 
         cat_weights = th.cat([new_weights, self._buffer_weights])
@@ -91,7 +84,7 @@ class RewardPrioritySamplingBuffer(ExemplarsBuffer):
 
     def resize(self, strategy, new_size):
         """Update the maximum size of the buffer."""
-        print("$$$$$$ self.buffer resize: ", len(self.buffer), len(self._buffer_weights))
+        print("$$$$$$ self.buffer resize: ", len(self.buffer), new_size)
         self.max_size = new_size
         if len(self.buffer) <= self.max_size:
             return
@@ -132,6 +125,7 @@ class RewardPriorityExperienceBalancedBuffer(BalancedExemplarsBuffer):
 
         for ll, b in zip(lens, self.buffer_groups.values()):
             b.resize(strategy, ll)
+
 
 class Policy_rollout:
     def __init__(self, exp_abs_path, run_ID, render=False, debug=False):
@@ -200,7 +194,6 @@ class Policy_rollout:
                         episodic_list_actions.append(th.tensor(action))
                         total_reward += rewards
                     print(f"@@@@@@ {self.run_config['object']}, length: {len(list_actions)}, z_rotation: {info['z_rotation_step']}")
-                    #if info['z_rotation_step'] > target_z_rotation[self.run_config['object']]:
                     list_observations.append(th.stack(episodic_list_observations))
                     list_actions.append(th.stack(episodic_list_actions))
                     episodic_rewards.append(round(total_reward))
@@ -209,13 +202,13 @@ class Policy_rollout:
                 expert_observations, expert_actions = (th.stack(list_observations)).detach().numpy(), (th.stack(list_actions)).detach().numpy()
                 print(f"$$$$$$ shape: {expert_observations.shape}, {expert_actions.shape}")
                 self.env.close()
-            np.savez_compressed(
-                os.path.join(self.run_dir, f"expert_data_{self.run_config['object']}"),
-                expert_observations=expert_observations,
-                expert_actions=expert_actions,
-                episodic_rewards=np.array(episodic_rewards),
-                episodic_z_rotation=np.array(episodic_z_rotation)
-            )
+            # np.savez_compressed(
+            #     os.path.join(self.run_dir, f"expert_data_{self.run_config['object']}"),
+            #     expert_observations=expert_observations,
+            #     expert_actions=expert_actions,
+            #     episodic_rewards=np.array(episodic_rewards),
+            #     episodic_z_rotation=np.array(episodic_z_rotation)
+            # )
             print(f"$$$$$$ load_rollouts - before reshape : {expert_observations.shape}, {expert_actions.shape}, {np.array(episodic_rewards).shape}")
             episodic_rewards =  np.repeat(episodic_rewards, expert_observations.shape[1])
             episodic_z_rotation =  np.repeat(episodic_z_rotation, expert_observations.shape[1])
@@ -299,22 +292,26 @@ class mymodel(nn.Module):
         self.student = model
         self.device = device
         self.model = model.policy.to(self.device)
+        print(self.model)
 
     def forward(self, input):
+        # print("@@@@@@@@@@ input.shape", input.shape)
         # A2C/PPO policy outputs actions, values, log_prob
         # SAC/TD3 policy outputs actions only
         if len(input.shape) > 2:
             # print("$$$$$$ input before reshape:", input.shape)
-            x = input.view(-1, input.shape[-1])
+            self.x = input.view(-1, input.shape[-1])
             # print("$$$$$$ input after reshape:", x.shape)
         else:
-            x = input
+            self.x = input
 
         if isinstance(self.student, (A2C, PPO)):
-            action, _, _ = self.model(x)
+            action, _, _ = self.model(self.x) # actions, values, log_prob
+            # action, _, _ = self.model(self.x, deterministic=True)
+            # print("@@@@@@@@@, distribution", lp.shape, lp, action.shape, self.model.action_dist.log_prob(action))
         else:
             # SAC/TD3:
-            action = self.model(x)
+            action = self.model(self.x)
 
         if len(input.shape) > 2:
             return action.view(input.shape[0], input.shape[1], action.shape[-1])
@@ -322,32 +319,48 @@ class mymodel(nn.Module):
             return action
 
 
-class customLoss(nn.Module):
-    def __init__(self, policy):
-        super(customLoss, self).__init__()
-        # --------------------------------------------
-        # Initialization
-        self.policy = policy
-        # --------------------------------------------
+class KL_Loss(nn.Module):
+    def __init__(self, student_policy):
+        super(KL_Loss, self).__init__()
+        self.student_policy = student_policy.model
 
     def forward(self, mb_output, mb_y):
-        # --------------------------------------------
-        # Define forward pass
-        means_teacher = mb_y
-        fake_std = th.from_numpy(np.array([1e-6]*len(means_teacher[0]))) # for deterministic
-        stds_teacher = th.stack([fake_std for x in means_teacher])
-        means_student = mb_output
-        stds_student = th.exp(th.clamp(self.policy.model.log_std, min=math.log(1e-6)))
-        # print("@@@@@@@@@@, fake_std:", fake_std.shape)
-        # print("@@@@@@@@@@, means_teacher:", means_teacher.shape)
-        # print("@@@@@@@@@@, stds_teacher:", stds_teacher.shape)
-        # print("@@@@@@@@@@, stds_student:", self.policy.model.log_std)
-        pi = th.distributions.Normal(loc=means_teacher, scale=stds_teacher)
-        pi_new = th.distributions.Normal(means_student, scale=stds_student)
-        kl = th.mean(th.distributions.kl.kl_divergence(pi, pi_new))
-        print("@@@@@@@@@@ kl:", kl)
-        return kl
-        # --------------------------------------------
+        expert_policy_log_std = th.ones_like(mb_y) * 1e-6
+        pi_student = self.student_policy.action_dist.proba_distribution(mb_output, self.student_policy.log_std).distribution
+        pi_expert = th.distributions.Normal(mb_y, expert_policy_log_std)
+        kl_loss = th.mean(th.distributions.kl.kl_divergence(pi_student, pi_expert))
+        print(f"@@@@@@@@@@ student policy shape: {mb_output.shape},  {self.student_policy.log_std.shape}")
+        print(f"@@@@@@@@@@ expert policy shape: {mb_y.shape},  {expert_policy_log_std.shape}")
+        print("@@@@@@@@@@ kl_loss:", kl_loss)
+        return kl_loss
+
+
+class NLL_Loss(nn.Module):
+    def __init__(self, policy):
+        super(NLL_Loss, self).__init__()
+        self.policy = policy
+        self.ent_weight = 1e-3
+        self.l2_weight = 0
+
+    def forward(self, _, mb_y):
+        print("@@@@@@@@@@ self.policy.x.shape:", self.policy.x.shape, mb_y.shape)
+        _, log_prob, entropy = self.policy.model.evaluate_actions(self.policy.x, mb_y)
+        # prob_true_act = th.exp(log_prob).mean()
+        log_prob = log_prob.mean()
+        entropy = entropy.mean() if entropy is not None else None
+
+        l2_norms = [th.sum(th.square(w)) for w in self.policy.model.parameters()]
+        l2_norm = sum(l2_norms) / 2  # divide by 2 to cancel with gradient of square
+        # sum of list defaults to float(0) if len == 0.
+        assert isinstance(l2_norm, th.Tensor)
+
+        print("@@@@@@@@@@ loss:", log_prob, entropy, l2_norm)
+        ent_loss = -self.ent_weight * (entropy if entropy is not None else th.zeros(1))
+        neglogp = -log_prob
+        l2_loss = self.l2_weight * l2_norm
+        loss = neglogp + ent_loss + l2_loss
+        return loss
+
 
 class Pretrain_agent:
     def __init__(self,
@@ -396,9 +409,11 @@ class Pretrain_agent:
 
         # Extract initial policy
         self.model = mymodel(self.device, self.student)
-        
-        self.criterion = nn.MSELoss()
+
+        # self.criterion = nn.MSELoss()
         # self.criterion = customLoss(self.model)
+        # self.criterion = NLL_Loss(self.model)
+        self.criterion = KL_Loss(self.model)
 
         self.bc_reward = []
         self.bc_rotation = []
@@ -408,9 +423,13 @@ class Pretrain_agent:
         # Define an Optimizer and a learning rate schedule.
         optimizer = optim.Adadelta(self.model.parameters(), lr=self.learning_rate)
 
-        sched = LRSchedulerPlugin(
-            StepLR(optimizer, step_size=1, gamma=self.scheduler_gamma)
-        )
+        # sched = LRSchedulerPlugin(
+        #     StepLR(optimizer, step_size=1, gamma=self.scheduler_gamma)
+        # )
+        sched = CosineAnnealingWarmRestarts(optimizer,
+                                        T_0 = self.epochs//5, # Number of iterations for the first restart
+                                        T_mult = 2, # A factor increases TiTi​ after a restart
+                                        eta_min = 1e-4) # Minimum learning rate
         # create strategy
         print(f"@@@@@@ strategy_name : {self.strategy_name}")
         if self.strategy_name == "JointTraining":
@@ -523,7 +542,7 @@ class Pretrain_agent:
                     self.model,
                     optimizer,
                     criterion=self.criterion,
-                    si_lambda=0.01,
+                    si_lambda=self.ewc_lambda,
                     eps=1e-07,
                     train_mb_size=self.batch_size,
                     train_epochs=self.epochs,

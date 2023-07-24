@@ -37,7 +37,7 @@ class Process_reward_data:
         monitor_log_dfs = [None] * len(monitor_files)
 
         for i, monitor_file in enumerate(monitor_files):
-            monitor_log_dfs[i] = pd.read_csv(self.monitoring_dir / monitor_file, header=1, nrows=35000)
+            monitor_log_dfs[i] = pd.read_csv(self.monitoring_dir / monitor_file, header=1, nrows=30000)
         
         monitoring_df_concat = pd.concat(monitor_log_dfs)
         by_row_index = monitoring_df_concat.groupby(monitoring_df_concat.index)
@@ -71,7 +71,7 @@ class Process_reward_data:
         return x[:data_len]
 
     def plot(
-        self, ax, title="", ylabel="", label="", log_component="r", x_units="steps", max_x_val=None, smoothed=False, ref_line_data=None, ref_line_name="No Action Taken"
+        self, ax, title="", ylabel="", label="", log_component="r", x_units="steps", max_x_val=None, smoothed=False, color=None, ref_line_data=None, ref_line_name="No Action Taken"
     ):
         window_size = 20
         avg_data = self.monitoring_means_df[log_component]
@@ -86,21 +86,21 @@ class Process_reward_data:
         moving_avg_std = self.get_moving_avg(std, window_size)
 
         ax.set_title(title, fontsize=10)
-        ax.set_ylabel(ylabel)
+        ax.set_ylabel(ylabel, color=color)
         ax.set_xlabel(x_units)
         label = log_component if label == "" else label
         if not smoothed:
-            p = ax.plot(x, y, label=label)[0]
+            p = ax.plot(x, y, c=color, label=label)[0]
             ax.fill_between(x, y - std, y + std, color=p.get_color(), alpha=0.1)
         else:
             ax.set_title(f"Inverted In-Hand Manipulation For {self.run_ID[1][4:].capitalize()}", fontsize=10)
-            p = ax.plot(moving_avg_xs, moving_avg, label=f"smoothed {label}")[0]
+            p = ax.plot(moving_avg_xs, moving_avg, c=color, label=f"smoothed {label}")[0]
             ax.fill_between(moving_avg_xs, moving_avg - moving_avg_std, moving_avg + moving_avg_std, color=p.get_color(), alpha=0.1)
 
         if ref_line_data is not None:
             ax.plot(x, [ref_line_data] * len(x), "k--", label=ref_line_name)
 
-        ax.grid()
+        ax.grid(color=color)
 
 
 def process_reward_data(
@@ -123,25 +123,34 @@ def process_reward_data(
     num_rows = int(np.ceil(len(log_components) / max_num_cols))
     num_cols = int(min(len(log_components), max_num_cols))
 
-    fig, ax = plt.subplots(num_rows, num_cols)
+    # fig, ax = plt.subplots(num_rows, num_cols)
+    fig, ax = plt.subplots()
     # plt.suptitle(f"Rewards For Run ID: {str(run_ID)}", fontsize=10)
 
-    if num_rows > 1 or num_cols > 1:
-        ax = ax.ravel()
-    else:
-        ax = [ax]
+    # if num_rows > 1 or num_cols > 1:
+    #     ax = ax.ravel()
+    # else:
+    #     ax = [ax]
+    ax = [ax]
     for i, log_component in enumerate(log_components):
         ref_line_data = None
         ref_line_name = None
+        if i == 0 :
+            axs = ax[0]
+            color = "red"
+        else:
+            axs = ax[0].twinx()
+            color = "blue"
 
         reward_data.plot(
-            ax[i],
+            axs,
             title=log_component,
             ylabel=f"Avg. Episode Reward" if log_component == "r" else f"Rotation around {log_component[0].capitalize()} axis",
             log_component=log_component,
             x_units=x_units,
             max_x_val=max_x_val,
             smoothed=smoothed,
+            color=color,
             ref_line_data=ref_line_data,
             ref_line_name=ref_line_name
         )

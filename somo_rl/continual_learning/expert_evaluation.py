@@ -6,7 +6,7 @@ import numpy as np
 import torch as th
 import pandas as pd
 from datetime import datetime
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingWarmRestarts
 from torch.utils.data.dataset import random_split
 from torch import nn
 from torch import optim
@@ -45,7 +45,7 @@ target_z_rotation = {
     'cross' : 180, #150
     'teddy' : 125
 }
-Length_Experience = 5 # 1000 episodes = 100000 steps
+Length_Experience = 1000 # 1000 episodes = 100000 steps
 
 class RewardPrioritySamplingBuffer(ExemplarsBuffer):
     """Buffer updated with reservoir sampling."""
@@ -74,7 +74,7 @@ class RewardPrioritySamplingBuffer(ExemplarsBuffer):
         :param new_data:
         :return:
         """
-        new_weights = th.tensor(new_data.targets) * th.rand(len(new_data))
+        new_weights = th.tensor(new_data.targets)# * th.rand(len(new_data))
         print(f"$$$$$$ new_weights update_from_dataset: {len(new_weights)}, {self.max_size}, {new_weights[:5]}")
 
         cat_weights = th.cat([new_weights, self._buffer_weights])
@@ -125,7 +125,6 @@ class RewardPriorityExperienceBalancedBuffer(BalancedExemplarsBuffer):
         print("$$$$$$ current_experience update: ",  strategy.experience.current_experience)
         num_exps = strategy.clock.train_exp_counter + 1
         lens = self.get_group_lengths(num_exps)
-        print("@@@@@@@@@@lens", lens)
 
         new_buffer = RewardPrioritySamplingBuffer(lens[-1])
         new_buffer.update_from_dataset(new_data)
@@ -158,7 +157,12 @@ class Policy_rollout:
         if os.path.isfile(saved_data_path):
             expert_observations, expert_actions, episodic_rewards, episodic_z_rotation = np.load(saved_data_path)["expert_observations"], np.load(saved_data_path)["expert_actions"], np.load(saved_data_path)["episodic_rewards"], np.load(saved_data_path)["episodic_z_rotation"]
             print(f"Using saved data from : {saved_data_path}")
-            print(f"$$$$$$ load_rollouts - data shape : {expert_observations.shape}, {expert_actions.shape}, {episodic_rewards.shape}")
+            print(f"$$$$$$ load_rollouts - before reshape : {expert_observations.shape}, {expert_actions.shape}, {episodic_rewards.shape}")
+            episodic_rewards =  np.repeat(episodic_rewards, expert_observations.shape[1])
+            episodic_z_rotation =  np.repeat(episodic_z_rotation, expert_observations.shape[1])
+            expert_observations = np.reshape(expert_observations, (-1, expert_observations.shape[-1]))
+            expert_actions = np.reshape(expert_actions, (-1, expert_actions.shape[-1]))
+            print(f"$$$$$$ load_rollouts - after reshape : {expert_observations.shape}, {expert_actions.shape}, {episodic_rewards.shape}")
         else:
             if os.path.isdir(os.path.join(self.run_dir, "results/processed_data/")) and os.listdir(os.path.join(self.run_dir, "results/processed_data/")):
                 print(f"@@@@@@ Preparing data from: {os.path.join(self.run_dir, 'results/processed_data/')}")
@@ -213,6 +217,12 @@ class Policy_rollout:
             #     episodic_rewards=np.array(episodic_rewards),
             #     episodic_z_rotation=np.array(episodic_z_rotation)
             # )
+            print(f"$$$$$$ load_rollouts - before reshape : {expert_observations.shape}, {expert_actions.shape}, {np.array(episodic_rewards).shape}")
+            episodic_rewards =  np.repeat(episodic_rewards, expert_observations.shape[1])
+            episodic_z_rotation =  np.repeat(episodic_z_rotation, expert_observations.shape[1])
+            expert_observations = np.reshape(expert_observations, (-1, expert_observations.shape[-1]))
+            expert_actions = np.reshape(expert_actions, (-1, expert_actions.shape[-1]))
+            print(f"$$$$$$ load_rollouts - after reshape : {expert_observations.shape}, {expert_actions.shape}, {episodic_z_rotation.shape}")
         self.expert_dataset = as_regression_dataset(AvalancheTensorDataset(th.tensor(expert_observations), th.tensor(expert_actions), targets=episodic_z_rotation))
         print(f"size of expert_dataset_{self.run_config['object']}: {len(self.expert_dataset)}")
 
@@ -290,6 +300,7 @@ class mymodel(nn.Module):
         self.student = model
         self.device = device
         self.model = model.policy.to(self.device)
+        print(self.model)
 
     def forward(self, input):
         print("@@@@@@@@@@ input.shape", input.shape)
@@ -303,7 +314,9 @@ class mymodel(nn.Module):
             self.x = input
 
         if isinstance(self.student, (A2C, PPO)):
-            action, _, _ = self.model(self.x)
+            action, _, _ = self.model(self.x) # actions, values, log_prob
+            # action, _, _ = self.model(self.x, deterministic=True)
+            # print("@@@@@@@@@, distribution", lp.shape, lp, action.shape, self.model.action_dist.log_prob(action))
         else:
             # SAC/TD3:
             action = self.model(self.x)
@@ -320,7 +333,7 @@ class KL_Loss(nn.Module):
         self.student_policy = student_policy.model
 
     def forward(self, mb_output, mb_y):
-        expert_policy_log_std = th.ones_like(mb_y) * 1e-12
+        expert_policy_log_std = th.ones_like(mb_y) * 1e-6
         pi_student = self.student_policy.action_dist.proba_distribution(mb_output, self.student_policy.log_std).distribution
         pi_expert = th.distributions.Normal(mb_y, expert_policy_log_std)
         kl_loss = th.mean(th.distributions.kl.kl_divergence(pi_student, pi_expert))
@@ -338,9 +351,6 @@ class NLL_Loss(nn.Module):
         self.l2_weight = 0
 
     def forward(self, _, mb_y):
-        if len(mb_y.shape) > 2:
-            mb_y = mb_y.view(-1, mb_y.shape[-1])
-
         print("@@@@@@@@@@ self.policy.x.shape:", self.policy.x.shape, mb_y.shape)
         _, log_prob, entropy = self.policy.model.evaluate_actions(self.policy.x, mb_y)
         # prob_true_act = th.exp(log_prob).mean()
@@ -370,15 +380,15 @@ class Pretrain_agent:
                  n_eval_episodes,
                  render,
                  expert_objects,
-                 batch_size=1, # 1 episode = 100 steps
-                 epochs=10,
+                 batch_size=100, # 1 episode = 100 steps
+                 epochs=50,
                  scheduler_gamma=0.7,
-                 learning_rate=0.1,
+                 learning_rate=1,
                  no_cuda=False,
                  seed=1,
-                 test_batch_size=1,
+                 test_batch_size=100,
                  ewc_lambda=3000,
-                 mem_size=Length_Experience
+                 mem_size=100*Length_Experience
                  ):
         self.student = student
         self.scenario = scenario
@@ -408,9 +418,10 @@ class Pretrain_agent:
         # Extract initial policy
         self.model = mymodel(self.device, self.student)
 
-        # self.criterion = nn.MSELoss()
+        self.criterion = nn.MSELoss()
+        # self.criterion = customLoss(self.model)
         # self.criterion = NLL_Loss(self.model)
-        self.criterion = KL_Loss(self.model)
+        # self.criterion = KL_Loss(self.model)
 
         self.bc_reward = []
         self.bc_rotation = []
@@ -420,9 +431,13 @@ class Pretrain_agent:
         # Define an Optimizer and a learning rate schedule.
         optimizer = optim.Adadelta(self.model.parameters(), lr=self.learning_rate)
 
-        sched = LRSchedulerPlugin(
-            StepLR(optimizer, step_size=1, gamma=self.scheduler_gamma)
-        )
+        # sched = LRSchedulerPlugin(
+        #     StepLR(optimizer, step_size=1, gamma=self.scheduler_gamma)
+        # )
+        sched = CosineAnnealingWarmRestarts(optimizer,
+                                        T_0 = self.epochs//5, # Number of iterations for the first restart
+                                        T_mult = 2, # A factor increases TiTi​ after a restart
+                                        eta_min = 1e-4) # Minimum learning rate
         # create strategy
         print(f"@@@@@@ strategy_name : {self.strategy_name}")
         if self.strategy_name == "JointTraining":
@@ -476,7 +491,7 @@ class Pretrain_agent:
                     self.model,
                     optimizer,
                     self.criterion,
-                    Length_Experience//self.num_experts, #patterns_per_exp, Patterns to store in the memory for each experience
+                    Length_Experience*100//self.num_experts, #patterns_per_exp, Patterns to store in the memory for each experience
                     0.5, #memory_strength, Offset to add to the projection direction
                     train_epochs=self.epochs,
                     device=self.device,
@@ -488,8 +503,8 @@ class Pretrain_agent:
                     self.model,
                     optimizer,
                     self.criterion,
-                    Length_Experience//self.num_experts, #patterns_per_exp, Patterns to store in the memory for each experience
-                    10, #sample_size, Number of patterns to sample from memory when projecting gradient
+                    Length_Experience*100//self.num_experts, #patterns_per_exp, Patterns to store in the memory for each experience
+                    100, #sample_size, Number of patterns to sample from memory when projecting gradient
                     train_epochs=self.epochs,
                     device=self.device,
                     train_mb_size=self.batch_size,
@@ -674,131 +689,77 @@ def run(run_IDs, exp_abs_path=EXPERIMENT_ABS_PATH, seed=100, render=False, debug
         print("@@@@@@ idx: ", idx, run_IDs[idx])
         expert_policy.append(Policy_rollout(exp_abs_path=exp_abs_path, run_ID=run_IDs[idx], render=render, debug=debug))
 
-    # if num_experts > 1:
-    #     # Evaluate the expert trained for multi-objects manipulation
-    #     # baseline_runID = [run_IDs[0][0], "PPO_multi_objects", run_IDs[0][-1]]
-    #     baseline_run_group_name = (list(run_IDs[0][1].split("_")))[0] + "_" + "_".join([(list(run_IDs[i][1].split("_")))[-1] for i in range(num_experts)])
-    #     baseline_runID = [run_IDs[2][0], baseline_run_group_name, run_IDs[0][-1]]
-    #     print(f"@@@@@@ baseline_runID: {baseline_runID}")
-    #     try:
-    #         baseline_run_dir, baseline_run_config = load_run_config_file(baseline_runID)
-    #         for i in range(num_experts):
-    #             if render:
-    #                 os.makedirs(os.path.join(EXPERIMENT_ABS_PATH, "render_vids", "Oracle"), exist_ok=True)
-    #                 vid_filename = os.path.join(EXPERIMENT_ABS_PATH, "render_vids",  "Oracle", "Oracle_Agent_on_" + str(expert_policy[i].run_config['object']) + "_render_vid.mp4")
-    #                 print("@@@@@@ ", vid_filename)
-    #             alg = construct_policy_model.ALGS[expert_policy[i].run_config["alg"]]
-    #             mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
-    #                 model=alg.load(os.path.join(baseline_run_dir, "models/best_model")), run_ID=run_IDs[i],
-    #                 n_eval_episodes=n_eval_episodes, deterministic=True, render=render, vid_filename=vid_filename if render else None)
-    #             print(
-    #                 f"Mean reward {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
-    #             print(
-    #                 f"z rotation {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_z_rotation_expert:.2f} +/- {std_z_rotation_expert:.2f}")
-    #     except:
-    #         print(f"Exception : The expert trained for multi-objects manipulation does not exist : {baseline_runID}")
+    if num_experts > 1:
+        # Evaluate the expert trained for multi-objects manipulation
+        # baseline_runID = [run_IDs[0][0], "PPO_multi_objects", run_IDs[0][-1]]
+        baseline_run_group_name = (list(run_IDs[0][1].split("_")))[0] + "_" + "_".join([(list(run_IDs[i][1].split("_")))[-1] for i in range(num_experts)])
+        #baseline_runID = [run_IDs[2][0], baseline_run_group_name, run_IDs[0][-1]]
+        baseline_runID = ["InHandManipulationInverted-v23", baseline_run_group_name, "seed_13"]
+        print(f"@@@@@@ baseline_runID: {baseline_runID} : {n_eval_episodes}")
+        try:
+            baseline_run_dir, baseline_run_config = load_run_config_file(baseline_runID)
+            for i in range(num_experts):
+                if render:
+                    os.makedirs(os.path.join(EXPERIMENT_ABS_PATH, "render_vids", "Oracle"), exist_ok=True)
+                    vid_filename = os.path.join(EXPERIMENT_ABS_PATH, "render_vids",  "Oracle", "Oracle_Agent_on_" + str(expert_policy[i].run_config['object']) + "_render_vid.mp4")
+                    print("@@@@@@ ", vid_filename)
+                alg = construct_policy_model.ALGS[expert_policy[i].run_config["alg"]]
+                mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
+                    model=alg.load(os.path.join(baseline_run_dir, "models/best_model")), run_ID=run_IDs[i],
+                    n_eval_episodes=n_eval_episodes, deterministic=False, render=render, vid_filename=vid_filename if render else None)
+                print(
+                    f"Mean reward {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
+                print(
+                    f"z rotation {baseline_run_config['object']} expert on {expert_policy[i].run_config['object']} env = {mean_z_rotation_expert:.2f} +/- {std_z_rotation_expert:.2f}")
+        except:
+            print(f"Exception : The expert trained for multi-objects manipulation does not exist : {baseline_runID}")
 
-    # # Evaluate the expert trained for individual-object manipulation, deterministic=False
+    # Evaluate the expert trained for individual-object manipulation, deterministic=False
+    # print("@@@@@@ n_eval_episodes: ", n_eval_episodes)
+    # eval_runIDs = run_IDs.copy()
+    # eval_runIDs.append(["InHandManipulationInverted-nothreshold", "PPO_ball", "seed_1"])
+    # eval_runIDs.append(["InHandManipulationInverted-nothreshold", "PPO_banana", "seed_1"])
+    # eval_runIDs.append(["InHandManipulationInverted-nothreshold", "PPO_cylinder", "seed_1"])
+    # eval_runIDs.append(["InHandManipulationInverted-nothreshold", "PPO_duck", "seed_1"])
+    # eval_runIDs.append(["InHandManipulationInverted-nothreshold", "PPO_dumbbell", "seed_1"])
     # for idx in range(num_experts):
-    #     for j in range(num_experts):
-    #        if render:
-    #            os.makedirs(os.path.join(EXPERIMENT_ABS_PATH, "render_vids", "Expert"), exist_ok=True)
-    #            vid_filename = os.path.join(EXPERIMENT_ABS_PATH, "render_vids",  "Expert", str(expert_policy[idx].run_config['object']) + "_expert_on_" + str(expert_policy[j].run_config['object']) + "_env_render_vid.mp4")
-    #            print("@@@@@@ ", vid_filename)
+    #     for _, eval_run in enumerate(eval_runIDs):
+    #         print("@@@@@@", eval_run)
+    #     #    if render:
+    #     #        os.makedirs(os.path.join(EXPERIMENT_ABS_PATH, "render_vids", "Expert"), exist_ok=True)
+    #     #        vid_filename = os.path.join(EXPERIMENT_ABS_PATH, "render_vids",  "Expert", str(expert_policy[idx].run_config['object']) + "_expert_on_" + str(expert_policy[j].run_config['object']) + "_env_render_vid.mp4")
+    #     #        print("@@@@@@ ", vid_filename)
     #         alg = construct_policy_model.ALGS[expert_policy[idx].run_config["alg"]]
     #         mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
-    #             model=alg.load(os.path.join(expert_policy[idx].run_dir, "models/best_model")), run_ID=run_IDs[j],
-    #             n_eval_episodes=n_eval_episodes, deterministic=False, render=render, vid_filename=vid_filename if render else None)
-    #         print(
-    #             f"@@@@@@ stochastic: Mean reward {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
-    #         print(
-    #             f"@@@@@@ stochastic: z rotation {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_z_rotation_expert:.2f} +/- {std_z_rotation_expert:.2f}")
-
-    # # Evaluate the expert trained for individual-object manipulation, deterministic=True
-    # for idx in range(num_experts):
-    #     for j in range(num_experts):
-    #         if render:
-    #             os.makedirs(os.path.join(EXPERIMENT_ABS_PATH, "render_vids", "Expert"), exist_ok=True)
-    #             vid_filename = os.path.join(EXPERIMENT_ABS_PATH, "render_vids", "Expert", str(expert_policy[idx].run_config['object']) + "_expert_on_" + str(expert_policy[j].run_config['object']) + "_env_render_vid.mp4")
-    #             print("@@@@@@ ", vid_filename)
-    #         alg = construct_policy_model.ALGS[expert_policy[idx].run_config["alg"]]
-    #         mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
-    #             model=alg.load(os.path.join(expert_policy[idx].run_dir, "models/best_model")), run_ID=run_IDs[j],
+    #             model=alg.load(os.path.join(expert_policy[idx].run_dir, "models/best_model")), run_ID=eval_run,
     #             n_eval_episodes=n_eval_episodes, deterministic=True, render=render, vid_filename=vid_filename if render else None)
     #         print(
-    #             f"@@@@@@ deterministic: Mean reward {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
+    #             f"@@@@@@ {n_eval_episodes} : Mean reward {expert_policy[idx].run_config['object']} expert on {eval_run[1][4:]} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
     #         print(
+    #             f"@@@@@@ {n_eval_episodes} : z rotation {expert_policy[idx].run_config['object']} expert on {eval_run[1][4:]} env = {mean_z_rotation_expert:.2f} +/- {std_z_rotation_expert:.2f}")
+
+    # Evaluate the expert trained for individual-object manipulation, deterministic=True
+    # for idx in range(num_experts):
+    #     for j in range(num_experts):
+    #         # if render:
+    #         #     os.makedirs(os.path.join(EXPERIMENT_ABS_PATH, "render_vids", "Expert"), exist_ok=True)
+    #         #     vid_filename = os.path.join(EXPERIMENT_ABS_PATH, "render_vids", "Expert", str(expert_policy[idx].run_config['object']) + "_expert_on_" + str(expert_policy[j].run_config['object']) + "_env_render_vid.mp4")
+    #         #     print("@@@@@@ ", vid_filename)
+    #         expert_reward, expert_rotation = [], []
+    #         alg = construct_policy_model.ALGS[expert_policy[idx].run_config["alg"]]
+    #         for run_idx in range(num_runs):
+    #             mean_reward_expert, std_reward_expert, mean_z_rotation_expert, std_z_rotation_expert = evaluate_policy(
+    #             model=alg.load(os.path.join(expert_policy[idx].run_dir, "models/best_model")), run_ID=run_IDs[j],
+    #             n_eval_episodes=n_eval_episodes, deterministic=True, render=render, vid_filename=vid_filename if render else None)
+    #             expert_reward.append(mean_reward_expert)
+    #             expert_rotation.append(mean_z_rotation_expert)
+    #             print(
+    #             f"@@@@@@ deterministic: Mean reward {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_reward_expert:.2f} +/- {std_reward_expert:.2f}")
+    #             print(
     #             f"@@@@@@ deterministic: z rotation {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {mean_z_rotation_expert:.2f} +/- {std_z_rotation_expert:.2f}")
-
-    run_reward, run_rotation = [], []
-    for run_idx in range(num_runs):
-        # Construct a student agent for behavior cloning
-        print("@@@@@@ run_idx : ", run_idx)
-        student = construct_policy_model.construct_policy_model(expert_policy[0].run_config["alg"],
-                                                                expert_policy[0].run_config["policy"], expert_policy[0].env,
-                                                                verbose=1)
-
-        # # Evaluate the initial student policy
-        # for idx in range(num_experts):
-        #     mean_reward_student, std_reward_student, mean_z_rotation_student, std_z_rotation_student = evaluate_policy(
-        #         model=student, run_ID=run_IDs[idx], n_eval_episodes=n_eval_episodes, deterministic=True, render=render)
-        #     print(
-        #         f"Mean reward student on {expert_policy[idx].run_config['object']} env = {mean_reward_student:.2f} +/- {std_reward_student:.2f}")
-        #     print(
-        #         f"z rotation student on {expert_policy[idx].run_config['object']} env = {mean_z_rotation_student:.2f} +/- {std_z_rotation_student:.2f}")
-
-        # Prepare the dataset for pretraining
-        print(f"num_experts = {num_experts}")
-        train_expert_dataset, test_expert_dataset = [], []
-        # for i in range(num_experts):
-        #     train_size = int(0.8 * len(expert_policy[i].expert_dataset))
-        #     test_size = len(expert_policy[i].expert_dataset) - train_size
-        #     train_expert, test_expert = random_split(
-        #         expert_policy[i].expert_dataset, [train_size, test_size]
-        #     )
-        #     # train_expert, test_expert = expert_policy[i].expert_dataset[:train_size], expert_policy[i].expert_dataset[train_size:]
-
-        #     train_expert_dataset.append(train_expert)
-        #     test_expert_dataset.append(test_expert)
-        # for i in range(num_experts):
-        #     print(f"$$$$$$ shape: {expert_policy[i].run_config['object']}, {expert_policy[i].expert_dataset[:][2]}")
-        #     print(f"$$$$$$ len: {len(expert_policy[i].expert_dataset[0][0][0])}, {len(expert_policy[i].expert_dataset[0][1][0])}")
-
-        # create scenario
-        scenario = dataset_benchmark(
-            train_datasets=[expert_policy[i].expert_dataset for i in range(num_experts)],
-            test_datasets=test_expert_dataset,
-            dataset_type=expert_policy[0].expert_dataset.dataset_type
-        )
-
-        print(f"scenario: {expert_policy[0].expert_dataset.dataset_type}")
-
-        # Pretrain the student agent
-        expert_objects = [expert_policy[idx].run_config['object'] for idx in range(num_experts)]
-        agent = Pretrain_agent(student, scenario, strategy_name, num_experts, run_IDs, n_eval_episodes, render, expert_objects)
-        run_reward.append(agent.bc_reward)
-        run_rotation.append(agent.bc_rotation)
-
-        os.makedirs(EXPERT_ABS_PATH, exist_ok=True)
-        now = datetime.now()
-        dt = now.strftime("%d-%m-%y_%H-%M-%S")
-        student_save_path = os.path.join(EXPERT_ABS_PATH, f"student_{'_'.join(expert_objects)}_{agent.strategy_name}_{run_idx}_{dt}")
-        student.save(student_save_path)
-        print(f"Saving agent at: {student_save_path}")
-
-    run_reward, run_rotation = np.array(run_reward), np.array(run_rotation)
-    print("@@@@@@ run_reward.shape", run_reward.shape)
-
-    if agent.strategy_name=="JointTraining":
-        for n in range(num_experts):
-            print(f"$$$$$$ {agent.strategy_name} {expert_policy[n].run_config['object']} reward : {np.mean(run_reward[:,:,n]):.2f} +/- {np.std(run_reward[:,:,n]):.2f}")
-            print(f"$$$$$$ {agent.strategy_name} {expert_policy[n].run_config['object']} z_rotation : {np.mean(run_rotation[:,:,n]):.2f} +/- {np.std(run_rotation[:,:,n]):.2f}")
-
-    else:
-        for m in range(num_experts):
-            for n in range(num_experts):
-                print(f"$$$$$$ {agent.strategy_name} {expert_policy[n].run_config['object']} experience_{m} reward : {np.mean(run_reward[:,m,n]):.2f} +/- {np.std(run_reward[:,m,n]):.2f}")
-                print(f"$$$$$$ {agent.strategy_name} {expert_policy[n].run_config['object']} experience_{m} z_rotation : {np.mean(run_rotation[:,m,n]):.2f} +/- {np.std(run_rotation[:,m,n]):.2f}")
+    
+    #         print(f"$$$$$$ Mean reward {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env =  {np.mean(expert_reward):.2f} +/- {np.std(expert_reward):.2f}")
+    #         print(f"$$$$$$ z rotation {expert_policy[idx].run_config['object']} expert on {expert_policy[j].run_config['object']} env = {np.mean(expert_rotation):.2f} +/- {np.std(expert_rotation):.2f}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Policy rollout run")
